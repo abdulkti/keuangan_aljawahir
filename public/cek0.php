@@ -1,0 +1,1 @@
+<?php echo "HALO " . PHP_VERSION . " ext=" . (extension_loaded('pgsql') ? 'YES' : 'NO');

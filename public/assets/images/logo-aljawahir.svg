@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D4AF37"/>
+      <stop offset="40%" stop-color="#F7DF8A"/>
+      <stop offset="60%" stop-color="#F7DF8A"/>
+      <stop offset="100%" stop-color="#B8942E"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="600" fill="#0B132B"/>
+
+  <!-- Outer circle -->
+  <circle cx="300" cy="300" r="270" fill="none" stroke="url(#gold)" stroke-width="5"/>
+  <circle cx="300" cy="300" r="260" fill="none" stroke="url(#gold)" stroke-width="0.5" opacity="0.15"/>
+
+  <!-- Jewel -->
+  <path d="M 300 150 L 312 166 L 300 182 L 288 166 Z" fill="url(#gold)"/>
+
+  <!-- Jim (ج) - from actual Arabic font outline -->
+  <g transform="translate(15, -95) scale(0.82)">
+    <!-- Main body -->
+    <path d="M 311.10222,385.18655 
+             q -6.1849,0 -17.9362,-0.92774 
+             -11.7513,-0.92773 -17.62695,-0.92773 
+             -19.79167,0 -44.53125,3.71094 
+             -16.08073,2.47395 -43.91276,8.04036 
+             12.36979,-34.94466 23.19336,-45.45898 
+             23.19336,-22.88412 77.92969,-22.88412 
+             20.41015,0 83.49609,8.65886 
+             29.37825,4.02018 50.71614,4.02018 
+             8.9681,0 26.28581,-2.16471 
+             17.31771,-2.16472 25.97656,-2.16472 
+             l -11.44206,52.26237 
+             Q 398,398.48407 352.23178,412.70933 
+             q -68.03386,21.02865 -106.07096,51.33464 
+             -47.31446,37.72786 -47.31446,89.06249 
+             0,66.48763 69.27084,99.88607 
+             60.30273,29.06901 161.11653,29.06901 
+             h 56.90104 
+             l 1.85547,3.40169 
+             -69.88933,49.16992 
+             h -17.93619 
+             q -66.79688,0 -111.01888,-12.36979 
+             -52.88086,-14.84375 -80.0944,-47.6237 
+             -30.92448,-37.41861 -30.92448,-98.95833 
+             0,-51.95312 24.43034,-93.39192 
+             18.55469,-31.54297 54.11784,-59.68424 
+             10.82357,-8.65886 54.42708,-37.41862 z" 
+          fill="url(#gold)" stroke="none"/>
+    <!-- Dot (نقطة) below Jim -->
+    <path d="M 400.78321,519.08954 374.4974,565.7855 325.94597,537.95345 349.75782,493.11298 Z" 
+          fill="url(#gold)" stroke="none"/>
+  </g>
+
+  <!-- Quran (open book) -->
+  <path d="M 200 360 Q 250 378 300 383" fill="none" stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 200 378 Q 250 396 300 401" fill="none" stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 400 360 Q 350 378 300 383" fill="none" stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 400 378 Q 350 396 300 401" fill="none" stroke="url(#gold)" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="300" y1="383" x2="300" y2="401" stroke="url(#gold)" stroke-width="2.5"/>
+  <line x1="226" y1="371" x2="264" y2="389" stroke="url(#gold)" stroke-width="1" opacity="0.3"/>
+  <line x1="374" y1="371" x2="336" y2="389" stroke="url(#gold)" stroke-width="1" opacity="0.3"/>
+
+  <!-- Text -->
+  <text x="300" y="500" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-weight="800" font-size="24" fill="url(#gold)" text-anchor="middle" letter-spacing="14">
+    ALJAWAHIR
+  </text>
+  <text x="300" y="528" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-weight="300" font-size="12" fill="#D4AF37" text-anchor="middle" letter-spacing="10" opacity="0.8">
+    ISLAMIC SCHOOLS
+  </text>
+</svg>
