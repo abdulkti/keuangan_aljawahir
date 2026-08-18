@@ -403,11 +403,11 @@ class Rekap extends BaseController
             $sheet->setTitle($ta);
 
             $sheet->setCellValue('A1', 'LAPORAN TABUNGAN HARI TUA  (THT) GURU SDIT AL JAWAHIR');
-            $sheet->mergeCells('A1:O1');
+            $sheet->mergeCells('A1:P1');
             $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
 
             $sheet->setCellValue('A2', 'T.P ' . str_replace('-', ' / ', $ta));
-            $sheet->mergeCells('A2:O2');
+            $sheet->mergeCells('A2:P2');
 
             $sheet->setCellValue('A4', 'NO');
             $sheet->setCellValue('B4', 'NAMA');
@@ -498,6 +498,7 @@ class Rekap extends BaseController
 
         // REKAP-TAHUN
         $rekapTahunData = [];
+        $rekapTahunPenarikan = [];
         foreach ($yearData as $ta => $guruData) {
             $total = 0;
             foreach ($guruData as $nama => $monthly) {
@@ -505,34 +506,54 @@ class Rekap extends BaseController
             }
             $rekapTahunData[$ta] = $total;
         }
+        foreach ($yearDataPenarikan as $ta => $guruData) {
+            $total = 0;
+            foreach ($guruData as $nama => $monthly) {
+                $total += array_sum($monthly);
+            }
+            $rekapTahunPenarikan[$ta] = $total;
+        }
 
         $sheet = $spreadsheet->createSheet();
         $sheet->setTitle('REKAP-TAHUN');
 
         $sheet->setCellValue('A4', 'NO');
         $sheet->setCellValue('B4', 'Tahun');
-        $sheet->setCellValue('C4', 'Jumlah');
-        $sheet->getStyle('A4:C4')->getFont()->setBold(true);
+        $sheet->setCellValue('C4', 'Setoran');
+        $sheet->setCellValue('D4', 'Penarikan');
+        $sheet->setCellValue('E4', 'Saldo');
+        $sheet->getStyle('A4:E4')->getFont()->setBold(true);
 
         $row = 5;
         $no = 1;
+        $grandSet = 0;
+        $grandPen = 0;
         foreach ($rekapTahunData as $ta => $total) {
+            $pen = $rekapTahunPenarikan[$ta] ?? 0;
             $sheet->setCellValue('A' . $row, $no);
             $sheet->setCellValue('B' . $row, $ta);
             $sheet->setCellValue('C' . $row, $this->formatRp($total));
+            $sheet->setCellValue('D' . $row, $this->formatRp($pen));
+            $sheet->setCellValue('E' . $row, $this->formatRp($total - $pen));
+            $grandSet += $total;
+            $grandPen += $pen;
             $row++;
             $no++;
         }
 
         $sheet->setCellValue('B' . $row, 'Jumlah');
-        $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
-        $sheet->setCellValue('C' . $row, $this->formatRp(array_sum($rekapTahunData)));
+        $sheet->getStyle('A' . $row . ':E' . $row)->getFont()->setBold(true);
+        $sheet->setCellValue('C' . $row, $this->formatRp($grandSet));
+        $sheet->setCellValue('D' . $row, $this->formatRp($grandPen));
+        $sheet->setCellValue('E' . $row, $this->formatRp($grandSet - $grandPen));
         $lastRow = $row;
 
-        $sheet->getStyle("A4:C$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+        $sheet->getStyle("A4:E$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         $sheet->getColumnDimension('A')->setWidth(5);
         $sheet->getColumnDimension('B')->setWidth(15);
-        $sheet->getColumnDimension('C')->setWidth(15);
+        $sheet->getColumnDimension('C')->setWidth(18);
+        $sheet->getColumnDimension('D')->setWidth(18);
+        $sheet->getColumnDimension('E')->setWidth(18);
 
         // REKAP-GURU
         $guruYearMatrix = [];
