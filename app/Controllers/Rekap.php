@@ -413,8 +413,9 @@ class Rekap extends BaseController
             $sheet->setCellValue('B4', 'NAMA');
             $sheet->setCellValue('C4', 'BULAN');
             $sheet->setCellValue('O4', 'Jumlah');
-            $sheet->getStyle('A4:O4')->getFont()->setBold(true);
-            $sheet->getStyle('A4:O4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->setCellValue('P4', 'Saldo');
+            $sheet->getStyle('A4:P4')->getFont()->setBold(true);
+            $sheet->getStyle('A4:P4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
             $sheet->mergeCells('C4:N4');
 
             $ci = 0;
@@ -423,47 +424,49 @@ class Rekap extends BaseController
                 $sheet->setCellValue($col . '5', $monthNames[$m]);
                 $ci++;
             }
-            $sheet->getStyle('A5:O5')->getFont()->setBold(true);
-            $sheet->getStyle('A5:O5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('A5:P5')->getFont()->setBold(true);
+            $sheet->getStyle('A5:P5')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
             $row = 6;
             $no = 1;
             $monthTotals = array_fill(0, 12, 0);
             $data = $yearData[$ta] ?? [];
+            $dataPenarikan = $yearDataPenarikan[$ta] ?? [];
 
             foreach ($guruNames as $nama) {
-                if (!isset($data[$nama])) {
-                    $sheet->setCellValue('A' . $row, $no);
-                    $sheet->setCellValue('B' . $row, $nama);
-                    $no++;
-                    $row++;
-                    continue;
-                }
+                $setoran = $data[$nama] ?? array_fill(1, 12, 0);
+                $penarikan = $dataPenarikan[$nama] ?? array_fill(1, 12, 0);
+                $totalSetoran = array_sum($setoran);
+                $totalPenarikan = array_sum($penarikan);
 
                 $sheet->setCellValue('A' . $row, $no);
                 $sheet->setCellValue('B' . $row, $nama);
-                $total = 0;
                 $ci = 0;
                 foreach ($acadMonths as $m) {
-                    $val = $data[$nama][$m];
+                    $val = $setoran[$m] ?? 0;
                     $col = Coordinate::stringFromColumnIndex(3 + $ci);
                     if ($val > 0) {
                         $sheet->setCellValue($col . $row, $this->formatRp($val));
-                        $total += $val;
                         $monthTotals[$ci] += $val;
                     }
                     $ci++;
                 }
-                if ($total > 0) {
-                    $sheet->setCellValue('O' . $row, $this->formatRp($total));
+                if ($totalSetoran > 0) {
+                    $sheet->setCellValue('O' . $row, $this->formatRp($totalSetoran));
+                }
+                $saldo = $totalSetoran - $totalPenarikan;
+                if ($saldo != 0) {
+                    $sheet->setCellValue('P' . $row, $this->formatRp($saldo));
                 }
                 $no++;
                 $row++;
             }
 
+            // Jumlah row
             $sheet->setCellValue('B' . $row, 'Jumlah');
-            $sheet->getStyle('A' . $row . ':O' . $row)->getFont()->setBold(true);
+            $sheet->getStyle('A' . $row . ':P' . $row)->getFont()->setBold(true);
             $grand = 0;
+            $grandPenarikan = 0;
             $ci = 0;
             foreach ($acadMonths as $m) {
                 $col = Coordinate::stringFromColumnIndex(3 + $ci);
@@ -475,13 +478,20 @@ class Rekap extends BaseController
                 $ci++;
             }
             $sheet->setCellValue('O' . $row, $this->formatRp($grand));
+            $grandSaldo = $grand;
+            foreach ($dataPenarikan as $nama => $monthly) {
+                $grandSaldo -= array_sum($monthly);
+            }
+            if ($grandSaldo != 0) {
+                $sheet->setCellValue('P' . $row, $this->formatRp($grandSaldo));
+            }
             $lastRow = $row;
 
-            $sheet->getStyle("A4:O$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+            $sheet->getStyle("A4:P$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
             $sheet->getColumnDimension('A')->setWidth(5);
             $sheet->getColumnDimension('B')->setWidth(35);
-            foreach (range('C', 'O') as $c) {
+            foreach (range('C', 'P') as $c) {
                 $sheet->getColumnDimension($c)->setWidth(12);
             }
         }
@@ -610,6 +620,27 @@ class Rekap extends BaseController
         }
 
         $lastDataRow = $row - 1;
+
+        // Saldo row
+        $sheet->setCellValue('B' . $row, 'Saldo');
+        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+        $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('0066CC'));
+        $colIdx = 3;
+        $grandTotalSaldo = 0;
+        foreach ($guruNames as $nama) {
+            $iuran = $grandIuran[$nama] ?? 0;
+            $realisasi = $grandRealisasi[$nama] ?? 0;
+            $saldo = $iuran - $realisasi;
+            $col = Coordinate::stringFromColumnIndex($colIdx);
+            $sheet->setCellValue($col . $row, $this->formatRp($saldo));
+            $sheet->getStyle($col . $row)->getFont()->setBold(true);
+            $grandTotalSaldo += $saldo;
+            $colIdx++;
+        }
+        $col = Coordinate::stringFromColumnIndex($colIdx);
+        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalSaldo));
+        $sheet->getStyle($col . $row)->getFont()->setBold(true);
+        $row++;
 
         // Grand total rows
         $sheet->setCellValue('A' . $row, 'JUMLAH');
