@@ -86,6 +86,7 @@ $routes->post('/kas-yayasan/transfer-saldo', 'KasYayasan::transferSaldo');
 $routes->get('/kas-yayasan/saldo', 'KasYayasan::getSaldo');
 
 $routes->get('/rekap/yayasan', 'Rekap::yayasan');
+$routes->get('/rekap/tht', 'Rekap::rekapTht');
 
 $routes->get('/kas-unit', 'KasUnit::index');
 $routes->get('/kas-unit/rekap', 'KasUnit::rekap');

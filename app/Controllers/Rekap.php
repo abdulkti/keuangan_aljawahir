@@ -225,6 +225,90 @@ class Rekap extends BaseController
         return $this->render('superadmin/rekap_yayasan', $data);
     }
 
+    public function rekapTht()
+    {
+        $redirect = $this->redirectIfNotRole(['admin', 'superadmin']);
+        if ($redirect) return $redirect;
+
+        $thtModel = new \App\Models\ThtTransaksiModel();
+        $guruModel = new \App\Models\GuruModel();
+        $unitModel = new \App\Models\UnitModel();
+
+        $tahunAjaran = $this->request->getGet('tahun_ajaran') ?? '';
+        $bulan = $this->request->getGet('bulan') ?? '';
+
+        $rekapPerTahun = $thtModel->getRekapPerTahun($tahunAjaran, $bulan);
+        $rekapTahun = [];
+        $grandTotalTHT = 0;
+        foreach ($rekapPerTahun as $r) {
+            $saldo = (float)$r['total_setoran'] - (float)$r['total_penarikan'];
+            $rekapTahun[] = [
+                'tahun' => $r['tahun'],
+                'total_setoran' => (float)$r['total_setoran'],
+                'total_penarikan' => (float)$r['total_penarikan'],
+                'saldo' => $saldo,
+            ];
+            $grandTotalTHT += $saldo;
+        }
+
+        $rekapPerGuru = $thtModel->getRekapPerGuru($tahunAjaran, $bulan);
+        $rekapGuru = [];
+        foreach ($rekapPerGuru as $r) {
+            $guru = $guruModel->find($r['guru_id']);
+            $unit = $guru ? $unitModel->find($guru['unit_id']) : null;
+            $rekapGuru[] = [
+                'nama' => $r['guru_nama'],
+                'unit' => $unit ? $unit['nama'] : '-',
+                'total_setoran' => (float)$r['total_setoran'],
+                'total_penarikan' => (float)$r['total_penarikan'],
+                'saldo' => $thtModel->getSaldoGuru($r['guru_id']),
+            ];
+        }
+
+        $allTaList = [];
+        $allDates = array_column($thtModel->findAll(), 'tanggal');
+        foreach ($allDates as $dt) {
+            $thn = (int) date('Y', strtotime($dt));
+            $bln = (int) date('m', strtotime($dt));
+            $ta = $bln >= 7 ? ($thn . '-' . ($thn + 1)) : (($thn - 1) . '-' . $thn);
+            if (!in_array($ta, $allTaList)) {
+                $allTaList[] = $ta;
+            }
+        }
+        rsort($allTaList);
+        if (empty($allTaList)) {
+            $blnSkrg = (int) date('m');
+            $thnSkrg = (int) date('Y');
+            $taSkrg = $blnSkrg >= 7 ? ($thnSkrg . '-' . ($thnSkrg + 1)) : (($thnSkrg - 1) . '-' . $thnSkrg);
+            $allTaList[] = $taSkrg;
+        }
+        if ($tahunAjaran && !in_array($tahunAjaran, $allTaList)) {
+            $allTaList[] = $tahunAjaran;
+            rsort($allTaList);
+        }
+
+        $data = [
+            'activeMenu' => 'rekap-tht',
+            'rekapTahun' => $rekapTahun,
+            'rekapGuru' => $rekapGuru,
+            'grandTotalTHT' => $grandTotalTHT,
+            'tahunAjaran' => $tahunAjaran,
+            'bulanTerpilih' => $bulan,
+            'thtTahunList' => $allTaList,
+            'bulanList' => [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+            ],
+        ];
+
+        if ($this->request->getGet('export') === 'tht') {
+            return $this->exportTHT($thtModel, $guruModel, $unitModel, $tahunAjaran, $bulan);
+        }
+
+        return $this->render('superadmin/rekap_tht', $data);
+    }
+
     public function tht()
     {
         return redirect()->to('/rekap/yayasan');

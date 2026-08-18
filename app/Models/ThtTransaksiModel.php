@@ -50,19 +50,21 @@ class ThtTransaksiModel extends Model
 
     public function getRekapPerTahun($tahunAjaran = null, $bulan = null)
     {
-        $builder = $this->select("
+        $db = \Config\Database::connect();
+        $builder = $db->table('tb_transaksi_tht');
+        $builder->select("
             CASE
                 WHEN EXTRACT(MONTH FROM tanggal)::int >= 7 THEN EXTRACT(YEAR FROM tanggal)::int || '-' || (EXTRACT(YEAR FROM tanggal)::int + 1)
                 ELSE (EXTRACT(YEAR FROM tanggal)::int - 1) || '-' || EXTRACT(YEAR FROM tanggal)::int
             END as tahun,
             SUM(CASE WHEN tipe = 'setoran' THEN jumlah ELSE 0 END) as total_setoran,
             SUM(CASE WHEN tipe = 'penarikan' THEN jumlah ELSE 0 END) as total_penarikan
-        ")
-        ->groupBy("CASE
+        ");
+        $builder->groupBy("CASE
             WHEN EXTRACT(MONTH FROM tanggal)::int >= 7 THEN EXTRACT(YEAR FROM tanggal)::int || '-' || (EXTRACT(YEAR FROM tanggal)::int + 1)
             ELSE (EXTRACT(YEAR FROM tanggal)::int - 1) || '-' || EXTRACT(YEAR FROM tanggal)::int
-        END")
-        ->orderBy("MIN(tanggal)", "ASC");
+        END");
+        $builder->orderBy("MIN(tanggal)", "ASC");
 
         if ($tahunAjaran) {
             $taParts = explode('-', $tahunAjaran);
@@ -84,18 +86,20 @@ class ThtTransaksiModel extends Model
             $builder->where('EXTRACT(MONTH FROM tanggal)::int =', (int)$bulan);
         }
 
-        return $builder->findAll();
+        return $builder->get()->getResultArray();
     }
 
     public function getRekapPerGuru($tahunAjaran = null, $bulan = null)
     {
-        $builder = $this->select("
-            guru_id, tb_guru.nama as guru_nama, tb_guru.nip as guru_nip,
+        $db = \Config\Database::connect();
+        $builder = $db->table('tb_transaksi_tht');
+        $builder->select("
+            tb_transaksi_tht.guru_id, tb_guru.nama as guru_nama, tb_guru.nip as guru_nip,
             SUM(CASE WHEN tipe = 'setoran' THEN jumlah ELSE 0 END) as total_setoran,
             SUM(CASE WHEN tipe = 'penarikan' THEN jumlah ELSE 0 END) as total_penarikan
-        ")
-        ->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id')
-        ->groupBy('guru_id, tb_guru.nama, tb_guru.nip');
+        ");
+        $builder->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id');
+        $builder->groupBy('tb_transaksi_tht.guru_id, tb_guru.nama, tb_guru.nip');
 
         if ($tahunAjaran) {
             $taParts = explode('-', $tahunAjaran);
@@ -117,6 +121,6 @@ class ThtTransaksiModel extends Model
             $builder->where('EXTRACT(MONTH FROM tanggal)::int =', (int)$bulan);
         }
 
-        return $builder->findAll();
+        return $builder->get()->getResultArray();
     }
 }
