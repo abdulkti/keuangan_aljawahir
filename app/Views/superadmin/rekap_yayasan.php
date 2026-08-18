@@ -26,24 +26,25 @@
 
       <div class="ku-toolbar">
         <form method="GET" action="/rekap/yayasan" class="ku-toolbar-left" style="display:flex;gap:8px;flex-wrap:wrap;margin:0">
+          <select name="tahun_ajaran" class="ku-filter-select" onchange="this.form.submit()">
+            <option value="">Semua Tahun Ajaran</option>
+            <?php foreach ($thtTahunList as $ta): ?>
+            <option value="<?= $ta ?>" <?= ($tahunAjaran ?? '') == $ta ? 'selected' : '' ?>><?= $ta ?></option>
+            <?php endforeach; ?>
+          </select>
           <select name="bulan" class="ku-filter-select" onchange="this.form.submit()">
             <option value="">Semua Bulan</option>
             <?php foreach ($bulanList as $b => $bl): ?>
             <option value="<?= $b ?>" <?= $bulanTerpilih == $b ? 'selected' : '' ?>><?= $bl ?></option>
             <?php endforeach; ?>
           </select>
-          <select name="tahun" class="ku-filter-select" onchange="this.form.submit()">
-            <?php foreach ($tahunList as $t): ?>
-            <option value="<?= $t ?>" <?= $tahunTerpilih == $t ? 'selected' : '' ?>><?= $t ?></option>
-            <?php endforeach; ?>
-          </select>
         </form>
         <div class="ku-toolbar-right">
-          <a href="/rekap/yayasan?export=keuangan&bulan=<?= $bulanTerpilih ?>&tahun=<?= $tahunTerpilih ?>" class="ku-btn ku-btn-primary">
+          <a href="/rekap/yayasan?export=keuangan&bulan=<?= $bulanTerpilih ?>&tahun_ajaran=<?= $tahunAjaran ?>" class="ku-btn ku-btn-primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Export Keuangan
           </a>
-          <a href="/rekap/yayasan?export=tht" class="ku-btn ku-btn-outline">
+          <a href="/rekap/yayasan?export=tht&tahun_ajaran=<?= $tahunAjaran ?>" class="ku-btn ku-btn-outline">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Export THT
           </a>
@@ -150,23 +151,7 @@
 
       <div class="ku-card">
         <div class="ku-card-header">
-          <h3 style="flex:1">Rekap THT per Tahun Ajaran</h3>
-          <form method="GET" action="/rekap/yayasan" style="display:flex;gap:6px;align-items:center">
-            <input type="hidden" name="tahun" value="<?= esc($tahunTerpilih) ?>">
-            <input type="hidden" name="bulan" value="<?= esc($bulanTerpilih) ?>">
-            <select name="tahun_ajaran" class="ku-filter-select" onchange="this.form.submit()" style="font-size:12px;padding:4px 8px">
-              <option value="">Semua Tahun Ajaran</option>
-              <?php foreach ($thtTahunList as $ta): ?>
-              <option value="<?= $ta ?>" <?= ($tahunAjaran ?? '') == $ta ? 'selected' : '' ?>><?= $ta ?></option>
-              <?php endforeach; ?>
-            </select>
-            <select name="bulan_tht" class="ku-filter-select" onchange="this.form.submit()" style="font-size:12px;padding:4px 8px">
-              <option value="">Semua Bulan</option>
-              <?php foreach ($bulanList as $bk => $bv): ?>
-              <option value="<?= $bk ?>" <?= ($bulanTht ?? '') == $bk ? 'selected' : '' ?>><?= $bv ?></option>
-              <?php endforeach; ?>
-            </select>
-          </form>
+          <h3>Rekap THT per Tahun Ajaran</h3>
         </div>
         <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
           <table class="ku-table">
