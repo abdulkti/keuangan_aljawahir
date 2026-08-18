@@ -15,6 +15,11 @@ use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
 
 class Rekap extends BaseController
 {
+    private function formatRp($angka)
+    {
+        return 'Rp ' . number_format((float)$angka, 0, '.', '.');
+    }
+
     public function yayasan()
     {
         $redirect = $this->redirectIfNotRole(['admin', 'superadmin']);
@@ -392,14 +397,14 @@ class Rekap extends BaseController
                     $val = $data[$nama][$m];
                     $col = Coordinate::stringFromColumnIndex(3 + $ci);
                     if ($val > 0) {
-                        $sheet->setCellValue($col . $row, $val);
+                        $sheet->setCellValue($col . $row, $this->formatRp($val));
                         $total += $val;
                         $monthTotals[$ci] += $val;
                     }
                     $ci++;
                 }
                 if ($total > 0) {
-                    $sheet->setCellValue('O' . $row, $total);
+                    $sheet->setCellValue('O' . $row, $this->formatRp($total));
                 }
                 $no++;
                 $row++;
@@ -413,21 +418,15 @@ class Rekap extends BaseController
                 $col = Coordinate::stringFromColumnIndex(3 + $ci);
                 $val = $monthTotals[$ci];
                 if ($val > 0) {
-                    $sheet->setCellValue($col . $row, $val);
+                    $sheet->setCellValue($col . $row, $this->formatRp($val));
                     $grand += $val;
                 }
                 $ci++;
             }
-            $sheet->setCellValue('O' . $row, $grand);
+            $sheet->setCellValue('O' . $row, $this->formatRp($grand));
             $lastRow = $row;
 
             $sheet->getStyle("A4:O$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-            for ($r = 6; $r <= $lastRow; $r++) {
-                for ($c = 3; $c <= 15; $c++) {
-                    $col = Coordinate::stringFromColumnIndex($c);
-                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('"Rp" #.##0');
-                }
-            }
 
             $sheet->getColumnDimension('A')->setWidth(5);
             $sheet->getColumnDimension('B')->setWidth(35);
@@ -459,20 +458,17 @@ class Rekap extends BaseController
         foreach ($rekapTahunData as $ta => $total) {
             $sheet->setCellValue('A' . $row, $no);
             $sheet->setCellValue('B' . $row, $ta);
-            $sheet->setCellValue('C' . $row, $total);
+            $sheet->setCellValue('C' . $row, $this->formatRp($total));
             $row++;
             $no++;
         }
 
         $sheet->setCellValue('B' . $row, 'Jumlah');
         $sheet->getStyle('A' . $row . ':C' . $row)->getFont()->setBold(true);
-        $sheet->setCellValue('C' . $row, array_sum($rekapTahunData));
+        $sheet->setCellValue('C' . $row, $this->formatRp(array_sum($rekapTahunData)));
         $lastRow = $row;
 
         $sheet->getStyle("A4:C$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-        if ($lastRow >= 5) {
-            $sheet->getStyle("C5:C$lastRow")->getNumberFormat()->setFormatCode('"Rp" #.##0');
-        }
         $sheet->getColumnDimension('A')->setWidth(5);
         $sheet->getColumnDimension('B')->setWidth(15);
         $sheet->getColumnDimension('C')->setWidth(15);
@@ -519,7 +515,7 @@ class Rekap extends BaseController
                 $val = $guruYearMatrix[$ta][$nama] ?? 0;
                 $col = Coordinate::stringFromColumnIndex($colIdx);
                 if ($val > 0) {
-                    $sheet->setCellValue($col . $row, $val);
+                    $sheet->setCellValue($col . $row, $this->formatRp($val));
                 } else {
                     $sheet->setCellValue($col . $row, '-');
                 }
@@ -541,25 +537,17 @@ class Rekap extends BaseController
                 $total += $guruYearMatrix[$ta][$nama] ?? 0;
             }
             $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . $row, $total);
+            $sheet->setCellValue($col . $row, $this->formatRp($total));
             $sheet->getStyle($col . $row)->getFont()->setBold(true);
             $grandTotalAll += $total;
             $colIdx++;
         }
         $col = Coordinate::stringFromColumnIndex($colIdx);
-        $sheet->setCellValue($col . $row, $grandTotalAll);
+        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalAll));
         $sheet->getStyle($col . $row)->getFont()->setBold(true);
         $lastRow = $row;
 
         $sheet->getStyle("A4:" . Coordinate::stringFromColumnIndex($maxColIdx) . "$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-        if ($lastDataRow >= 5) {
-            for ($r = 5; $r <= $lastRow; $r++) {
-                for ($c = 2; $c <= $maxColIdx; $c++) {
-                    $col = Coordinate::stringFromColumnIndex($c);
-                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('"Rp" #.##0');
-                }
-            }
-        }
 
         $sheet->getColumnDimension('A')->setWidth(15);
         for ($c = 2; $c <= $maxColIdx; $c++) {
