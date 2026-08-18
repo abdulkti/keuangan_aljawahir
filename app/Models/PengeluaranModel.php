@@ -56,14 +56,7 @@ class PengeluaranModel extends Model
                     $model->where('EXTRACT(YEAR FROM tanggal)::int =', $year, false);
                     $model->where('EXTRACT(MONTH FROM tanggal)::int =', $bulan, false);
                 } else {
-                    $model->groupStart()
-                        ->where('EXTRACT(MONTH FROM tanggal)::int >=', 7)
-                        ->where('EXTRACT(YEAR FROM tanggal)::int =', $taStart)
-                        ->groupEnd()
-                        ->orGroupStart()
-                        ->where('EXTRACT(MONTH FROM tanggal)::int <=', 6)
-                        ->where('EXTRACT(YEAR FROM tanggal)::int =', $taEnd)
-                        ->orGroupEnd();
+                    $model->where("(EXTRACT(MONTH FROM tanggal)::int >= 7 AND EXTRACT(YEAR FROM tanggal)::int = {$taStart}) OR (EXTRACT(MONTH FROM tanggal)::int <= 6 AND EXTRACT(YEAR FROM tanggal)::int = {$taEnd})", null, false);
                 }
             }
         } elseif ($bulan) {

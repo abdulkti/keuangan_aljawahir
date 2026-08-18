@@ -71,14 +71,7 @@ class ThtTransaksiModel extends Model
             if (count($taParts) === 2) {
                 $taStart = (int)$taParts[0];
                 $taEnd = (int)$taParts[1];
-                $builder->groupStart()
-                    ->where('EXTRACT(MONTH FROM tanggal)::int >=', 7)
-                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taStart)
-                    ->groupEnd()
-                    ->orGroupStart()
-                    ->where('EXTRACT(MONTH FROM tanggal)::int <=', 6)
-                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taEnd)
-                    ->orGroupEnd();
+                $builder->where("(EXTRACT(MONTH FROM tanggal)::int >= 7 AND EXTRACT(YEAR FROM tanggal)::int = {$taStart}) OR (EXTRACT(MONTH FROM tanggal)::int <= 6 AND EXTRACT(YEAR FROM tanggal)::int = {$taEnd})", null, false);
             }
         }
 
@@ -106,14 +99,7 @@ class ThtTransaksiModel extends Model
             if (count($taParts) === 2) {
                 $taStart = (int)$taParts[0];
                 $taEnd = (int)$taParts[1];
-                $builder->groupStart()
-                    ->where('EXTRACT(MONTH FROM tanggal)::int >=', 7)
-                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taStart)
-                    ->groupEnd()
-                    ->orGroupStart()
-                    ->where('EXTRACT(MONTH FROM tanggal)::int <=', 6)
-                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taEnd)
-                    ->orGroupEnd();
+                $builder->where("(EXTRACT(MONTH FROM tanggal)::int >= 7 AND EXTRACT(YEAR FROM tanggal)::int = {$taStart}) OR (EXTRACT(MONTH FROM tanggal)::int <= 6 AND EXTRACT(YEAR FROM tanggal)::int = {$taEnd})", null, false);
             }
         }
 

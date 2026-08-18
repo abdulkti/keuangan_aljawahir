@@ -76,14 +76,7 @@ class Rekap extends BaseController
                     $builder->where('EXTRACT(YEAR FROM tb_kas_yayasan.tanggal)::int =', $year, false);
                     $builder->where('EXTRACT(MONTH FROM tb_kas_yayasan.tanggal)::int =', $bulanInt, false);
                 } else {
-                    $builder->groupStart()
-                        ->where('EXTRACT(MONTH FROM tb_kas_yayasan.tanggal)::int >=', 7)
-                        ->where('EXTRACT(YEAR FROM tb_kas_yayasan.tanggal)::int =', $taStart)
-                        ->groupEnd()
-                        ->orGroupStart()
-                        ->where('EXTRACT(MONTH FROM tb_kas_yayasan.tanggal)::int <=', 6)
-                        ->where('EXTRACT(YEAR FROM tb_kas_yayasan.tanggal)::int =', $taEnd)
-                        ->orGroupEnd();
+                    $builder->where("(EXTRACT(MONTH FROM tb_kas_yayasan.tanggal)::int >= 7 AND EXTRACT(YEAR FROM tb_kas_yayasan.tanggal)::int = {$taStart}) OR (EXTRACT(MONTH FROM tb_kas_yayasan.tanggal)::int <= 6 AND EXTRACT(YEAR FROM tb_kas_yayasan.tanggal)::int = {$taEnd})", null, false);
                 }
             }
         }
