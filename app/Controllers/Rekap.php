@@ -33,6 +33,8 @@ class Rekap extends BaseController
 
         $tahun = $this->request->getGet('tahun') ?: date('Y');
         $bulan = $this->request->getGet('bulan');
+        $tahunAjaran = $this->request->getGet('tahun_ajaran') ?? '';
+        $bulanTht = $this->request->getGet('bulan_tht') ?? '';
 
         // --- Rekap Keuangan ---
         $allPemasukan = $pemasukanModel->where('jenis', 'pemasukan')->orderBy('tanggal', 'DESC')->findAll();
@@ -120,7 +122,7 @@ class Rekap extends BaseController
         $rekapKategori = array_values($tempKategori);
 
         // --- Rekap THT ---
-        $rekapPerTahun = $thtModel->getRekapPerTahun();
+        $rekapPerTahun = $thtModel->getRekapPerTahun($tahunAjaran, $bulanTht);
         $rekapTahun = [];
         $grandTotalTHT = 0;
         foreach ($rekapPerTahun as $r) {
@@ -134,7 +136,7 @@ class Rekap extends BaseController
             $grandTotalTHT += $saldo;
         }
 
-        $rekapPerGuru = $thtModel->getRekapPerGuru();
+        $rekapPerGuru = $thtModel->getRekapPerGuru($tahunAjaran, $bulanTht);
         $rekapGuru = [];
         foreach ($rekapPerGuru as $r) {
             $guru = $guruModel->find($r['guru_id']);
@@ -146,6 +148,29 @@ class Rekap extends BaseController
                 'total_penarikan' => (float)$r['total_penarikan'],
                 'saldo' => $thtModel->getSaldoGuru($r['guru_id']),
             ];
+        }
+
+        // Build THT academic year list
+        $allThtTransaksi = $thtModel->findAll();
+        $thtTahunList = [];
+        foreach ($allThtTransaksi as $t) {
+            $thn = (int) date('Y', strtotime($t['tanggal']));
+            $bln = (int) date('m', strtotime($t['tanggal']));
+            $ta = $bln >= 7 ? ($thn . '-' . ($thn + 1)) : (($thn - 1) . '-' . $thn);
+            if (!in_array($ta, $thtTahunList)) {
+                $thtTahunList[] = $ta;
+            }
+        }
+        rsort($thtTahunList);
+        if (empty($thtTahunList)) {
+            $blnSkrg = (int) date('m');
+            $thnSkrg = (int) date('Y');
+            $taSkrg = $blnSkrg >= 7 ? ($thnSkrg . '-' . ($thnSkrg + 1)) : (($thnSkrg - 1) . '-' . $thnSkrg);
+            $thtTahunList[] = $taSkrg;
+        }
+        if ($tahunAjaran && !in_array($tahunAjaran, $thtTahunList)) {
+            $thtTahunList[] = $tahunAjaran;
+            rsort($thtTahunList);
         }
 
         // Export
@@ -172,6 +197,9 @@ class Rekap extends BaseController
                 5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
                 9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
             ],
+            'tahunAjaran' => $tahunAjaran,
+            'thtTahunList' => $thtTahunList,
+            'bulanTht' => $bulanTht,
         ];
 
         return $this->render('superadmin/rekap_yayasan', $data);

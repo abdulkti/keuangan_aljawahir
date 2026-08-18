@@ -48,27 +48,75 @@ class ThtTransaksiModel extends Model
             ->findAll();
     }
 
-    public function getRekapPerTahun()
+    public function getRekapPerTahun($tahunAjaran = null, $bulan = null)
     {
-        return $this->select("
-            EXTRACT(YEAR FROM tanggal) as tahun,
+        $builder = $this->select("
+            CASE
+                WHEN EXTRACT(MONTH FROM tanggal)::int >= 7 THEN EXTRACT(YEAR FROM tanggal)::int || '-' || (EXTRACT(YEAR FROM tanggal)::int + 1)
+                ELSE (EXTRACT(YEAR FROM tanggal)::int - 1) || '-' || EXTRACT(YEAR FROM tanggal)::int
+            END as tahun,
             SUM(CASE WHEN tipe = 'setoran' THEN jumlah ELSE 0 END) as total_setoran,
             SUM(CASE WHEN tipe = 'penarikan' THEN jumlah ELSE 0 END) as total_penarikan
         ")
-        ->groupBy('EXTRACT(YEAR FROM tanggal)')
-        ->orderBy('EXTRACT(YEAR FROM tanggal)', 'ASC')
-        ->findAll();
+        ->groupBy("CASE
+            WHEN EXTRACT(MONTH FROM tanggal)::int >= 7 THEN EXTRACT(YEAR FROM tanggal)::int || '-' || (EXTRACT(YEAR FROM tanggal)::int + 1)
+            ELSE (EXTRACT(YEAR FROM tanggal)::int - 1) || '-' || EXTRACT(YEAR FROM tanggal)::int
+        END")
+        ->orderBy("MIN(tanggal)", "ASC");
+
+        if ($tahunAjaran) {
+            $taParts = explode('-', $tahunAjaran);
+            if (count($taParts) === 2) {
+                $taStart = (int)$taParts[0];
+                $taEnd = (int)$taParts[1];
+                $builder->groupStart()
+                    ->where('EXTRACT(MONTH FROM tanggal)::int >=', 7)
+                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taStart)
+                    ->groupEnd()
+                    ->orGroupStart()
+                    ->where('EXTRACT(MONTH FROM tanggal)::int <=', 6)
+                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taEnd)
+                    ->orGroupEnd();
+            }
+        }
+
+        if ($bulan) {
+            $builder->where('EXTRACT(MONTH FROM tanggal)::int =', (int)$bulan);
+        }
+
+        return $builder->findAll();
     }
 
-    public function getRekapPerGuru()
+    public function getRekapPerGuru($tahunAjaran = null, $bulan = null)
     {
-        return $this->select("
+        $builder = $this->select("
             guru_id, tb_guru.nama as guru_nama, tb_guru.nip as guru_nip,
             SUM(CASE WHEN tipe = 'setoran' THEN jumlah ELSE 0 END) as total_setoran,
             SUM(CASE WHEN tipe = 'penarikan' THEN jumlah ELSE 0 END) as total_penarikan
         ")
         ->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id')
-        ->groupBy('guru_id, tb_guru.nama, tb_guru.nip')
-        ->findAll();
+        ->groupBy('guru_id, tb_guru.nama, tb_guru.nip');
+
+        if ($tahunAjaran) {
+            $taParts = explode('-', $tahunAjaran);
+            if (count($taParts) === 2) {
+                $taStart = (int)$taParts[0];
+                $taEnd = (int)$taParts[1];
+                $builder->groupStart()
+                    ->where('EXTRACT(MONTH FROM tanggal)::int >=', 7)
+                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taStart)
+                    ->groupEnd()
+                    ->orGroupStart()
+                    ->where('EXTRACT(MONTH FROM tanggal)::int <=', 6)
+                    ->where('EXTRACT(YEAR FROM tanggal)::int =', $taEnd)
+                    ->orGroupEnd();
+            }
+        }
+
+        if ($bulan) {
+            $builder->where('EXTRACT(MONTH FROM tanggal)::int =', (int)$bulan);
+        }
+
+        return $builder->findAll();
     }
 }

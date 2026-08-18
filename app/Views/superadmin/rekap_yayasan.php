@@ -150,7 +150,23 @@
 
       <div class="ku-card">
         <div class="ku-card-header">
-          <h3>Rekap THT per Tahun</h3>
+          <h3 style="flex:1">Rekap THT per Tahun Ajaran</h3>
+          <form method="GET" action="/rekap/yayasan" style="display:flex;gap:6px;align-items:center">
+            <input type="hidden" name="tahun" value="<?= esc($tahunTerpilih) ?>">
+            <input type="hidden" name="bulan" value="<?= esc($bulanTerpilih) ?>">
+            <select name="tahun_ajaran" class="ku-filter-select" onchange="this.form.submit()" style="font-size:12px;padding:4px 8px">
+              <option value="">Semua Tahun Ajaran</option>
+              <?php foreach ($thtTahunList as $ta): ?>
+              <option value="<?= $ta ?>" <?= ($tahunAjaran ?? '') == $ta ? 'selected' : '' ?>><?= $ta ?></option>
+              <?php endforeach; ?>
+            </select>
+            <select name="bulan_tht" class="ku-filter-select" onchange="this.form.submit()" style="font-size:12px;padding:4px 8px">
+              <option value="">Semua Bulan</option>
+              <?php foreach ($bulanList as $bk => $bv): ?>
+              <option value="<?= $bk ?>" <?= ($bulanTht ?? '') == $bk ? 'selected' : '' ?>><?= $bv ?></option>
+              <?php endforeach; ?>
+            </select>
+          </form>
         </div>
         <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
           <table class="ku-table">
