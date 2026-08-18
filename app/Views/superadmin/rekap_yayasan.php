@@ -121,36 +121,6 @@
 
       <div class="ku-card">
         <div class="ku-card-header">
-          <h3>Rekap Harian Yayasan</h3>
-        </div>
-        <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
-          <table class="ku-table">
-            <thead>
-              <tr><th>Tanggal</th><th>Keterangan</th><th>Kategori</th><th style="text-align:right">Pemasukan</th><th style="text-align:right">Pengeluaran</th><th style="text-align:right">Saldo</th></tr>
-            </thead>
-            <tbody>
-              <?php if (!empty($rekapHarian)): ?>
-                <?php $no = 1; ?>
-                <?php foreach ($rekapHarian as $h): ?>
-                  <tr>
-                    <td><?= date('d/m/Y', strtotime($h['tanggal'])) ?></td>
-                    <td><?= esc($h['keterangan']) ?></td>
-                    <td><?= esc($h['kategori']) ?></td>
-                    <td style="text-align:right;color:var(--ku-green)"><?= $h['pemasukan'] > 0 ? 'Rp ' . number_format($h['pemasukan'], 0, ',', '.') : '' ?></td>
-                    <td style="text-align:right;color:var(--ku-red)"><?= $h['pengeluaran'] > 0 ? 'Rp ' . number_format($h['pengeluaran'], 0, ',', '.') : '' ?></td>
-                    <td style="text-align:right;font-weight:700">Rp <?= number_format($h['saldo'], 0, ',', '.') ?></td>
-                  </tr>
-                <?php endforeach; ?>
-              <?php else: ?>
-                <tr><td colspan="6" style="text-align:center;padding:30px;color:var(--ku-slate-400)">Belum ada data</td></tr>
-              <?php endif; ?>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="ku-card">
-        <div class="ku-card-header">
           <h3>Rekap THT per Tahun Ajaran</h3>
         </div>
         <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
