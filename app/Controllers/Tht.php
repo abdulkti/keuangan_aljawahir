@@ -112,6 +112,35 @@ class Tht extends BaseController
             ];
         }
 
+        $unitModel = new \App\Models\UnitModel();
+        $rekapPerTahun = $thtModel->getRekapPerTahun($tahunFilter, $bulanFilter);
+        $rekapTahun = [];
+        $grandTotalTHT = 0;
+        foreach ($rekapPerTahun as $r) {
+            $saldo = (float)$r['total_setoran'] - (float)$r['total_penarikan'];
+            $rekapTahun[] = [
+                'tahun' => $r['tahun'],
+                'total_setoran' => (float)$r['total_setoran'],
+                'total_penarikan' => (float)$r['total_penarikan'],
+                'saldo' => $saldo,
+            ];
+            $grandTotalTHT += $saldo;
+        }
+
+        $rekapPerGuru = $thtModel->getRekapPerGuru($tahunFilter, $bulanFilter);
+        $rekapGuru = [];
+        foreach ($rekapPerGuru as $r) {
+            $guru = $guruModel->find($r['guru_id']);
+            $unit = $guru ? $unitModel->find($guru['unit_id']) : null;
+            $rekapGuru[] = [
+                'nama' => $r['guru_nama'],
+                'unit' => $unit ? $unit['nama'] : '-',
+                'total_setoran' => (float)$r['total_setoran'],
+                'total_penarikan' => (float)$r['total_penarikan'],
+                'saldo' => $thtModel->getSaldoGuru($r['guru_id']),
+            ];
+        }
+
         $data = [
             'activeMenu' => 'tht',
             'transaksi' => $transaksi,
@@ -122,6 +151,9 @@ class Tht extends BaseController
             'tahunList' => $tahunList,
             'bulanFilter' => $bulanFilter,
             'bulanList' => $bulanList,
+            'rekapTahun' => $rekapTahun,
+            'rekapGuru' => $rekapGuru,
+            'grandTotalTHT' => $grandTotalTHT,
         ];
 
         return $this->render('superadmin/tht', $data);

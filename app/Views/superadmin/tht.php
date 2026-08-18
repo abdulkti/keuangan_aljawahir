@@ -130,6 +130,69 @@
         </div>
       </div>
 
+      <div class="ku-card" style="margin-top:24px">
+        <div class="ku-card-header">
+          <h3>Rekap THT per Tahun Ajaran</h3>
+        </div>
+        <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
+          <table class="ku-table">
+            <thead>
+              <tr><th>Tahun</th><th style="text-align:right">Total Setoran</th><th style="text-align:right">Total Penarikan</th><th style="text-align:right">Saldo</th></tr>
+            </thead>
+            <tbody>
+              <?php $grandSetoran = 0; $grandPenarikan = 0; $grandSaldo = 0; ?>
+              <?php if (!empty($rekapTahun)): ?>
+                <?php foreach ($rekapTahun as $t): ?>
+                  <?php $grandSetoran += $t['total_setoran']; $grandPenarikan += $t['total_penarikan']; $grandSaldo += $t['saldo']; ?>
+                  <tr>
+                    <td><strong><?= $t['tahun'] ?></strong></td>
+                    <td style="text-align:right">Rp <?= number_format($t['total_setoran'], 0, ',', '.') ?></td>
+                    <td style="text-align:right">Rp <?= number_format($t['total_penarikan'], 0, ',', '.') ?></td>
+                    <td style="text-align:right;font-weight:700">Rp <?= number_format($t['saldo'], 0, ',', '.') ?></td>
+                  </tr>
+                <?php endforeach; ?>
+                <tr style="background:var(--ku-slate-50);font-weight:700">
+                  <td>GRAND TOTAL</td>
+                  <td style="text-align:right">Rp <?= number_format($grandSetoran, 0, ',', '.') ?></td>
+                  <td style="text-align:right">Rp <?= number_format($grandPenarikan, 0, ',', '.') ?></td>
+                  <td style="text-align:right">Rp <?= number_format($grandSaldo, 0, ',', '.') ?></td>
+                </tr>
+              <?php else: ?>
+                <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--ku-slate-400)">Belum ada data</td></tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ku-card" style="margin-top:24px">
+        <div class="ku-card-header">
+          <h3>Rekap THT per Guru</h3>
+        </div>
+        <div class="ku-table-wrap" style="border:none;box-shadow:none;border-radius:0">
+          <table class="ku-table">
+            <thead>
+              <tr><th>Nama Guru</th><th>Unit</th><th style="text-align:right">Total Setoran</th><th style="text-align:right">Total Penarikan</th><th style="text-align:right">Saldo</th></tr>
+            </thead>
+            <tbody>
+              <?php if (!empty($rekapGuru)): ?>
+                <?php foreach ($rekapGuru as $g): ?>
+                  <tr>
+                    <td><?= esc($g['nama']) ?></td>
+                    <td><?= esc($g['unit']) ?></td>
+                    <td style="text-align:right">Rp <?= number_format($g['total_setoran'], 0, ',', '.') ?></td>
+                    <td style="text-align:right">Rp <?= number_format($g['total_penarikan'], 0, ',', '.') ?></td>
+                    <td style="text-align:right;font-weight:700">Rp <?= number_format($g['saldo'], 0, ',', '.') ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              <?php else: ?>
+                <tr><td colspan="5" style="text-align:center;padding:30px;color:var(--ku-slate-400)">Belum ada data guru</td></tr>
+              <?php endif; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="ku-modal-overlay" id="modalSetorTHT">
         <div class="ku-modal-box">
           <div class="ku-modal-head">
