@@ -356,16 +356,10 @@ class Rekap extends BaseController
             $guruInfo[$g['id']] = ['nama' => $g['nama'], 'unit' => $g['unit_nama'] ?? ''];
         }
 
-        $query = $thtModel->select('tb_transaksi_tht.*, tb_guru.nama as guru_nama')
+        $transactions = $thtModel->select('tb_transaksi_tht.*, tb_guru.nama as guru_nama')
             ->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id')
-            ->orderBy('tb_guru.nama, tanggal', 'ASC');
-
-        if ($bulan) {
-            $blnInt = (int) $bulan;
-            $query->where('EXTRACT(MONTH FROM tanggal)', $blnInt);
-        }
-
-        $transactions = $query->findAll();
+            ->orderBy('tb_guru.nama, tanggal', 'ASC')
+            ->findAll();
 
         $yearData = [];
         $yearDataPenarikan = [];
@@ -377,6 +371,9 @@ class Rekap extends BaseController
             $ta = $bln >= 7 ? ($thn . '-' . ($thn + 1)) : (($thn - 1) . '-' . $thn);
 
             if ($tahunAjaran && $ta !== $tahunAjaran) {
+                continue;
+            }
+            if ($bulan && $bln !== (int) $bulan) {
                 continue;
             }
 
