@@ -156,8 +156,8 @@
             <p><?= number_format(count($rows), 0, ',', '.') ?> transaksi</p>
           </div>
           <div class="ku-table-export">
-            <a href="/tabungan/rekap/export-excel?start=<?= urlencode($filterStart) ?>&end=<?= urlencode($filterEnd) ?>&tipe_akun=<?= urlencode($filterTipe) ?>&jenis=<?= urlencode($filterJenis) ?>" class="ku-btn ku-btn-sm ku-btn-primary">
-              Export Excel
+            <a href="/tabungan/rekap/export-excel?start=<?= urlencode($filterStart) ?>&end=<?= urlencode($filterEnd) ?>" class="ku-btn ku-btn-sm ku-btn-primary">
+              Export Per Kelas
             </a>
           </div>
         </div>

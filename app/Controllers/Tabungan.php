@@ -662,85 +662,310 @@ class Tabungan extends BaseController
 
         $filterStart = $this->request->getGet('start') ?: date('Y-m-01');
         $filterEnd = $this->request->getGet('end') ?: date('Y-m-d');
-        $filterTipe = $this->request->getGet('tipe_akun') ?: '';
-        $filterJenis = $this->request->getGet('jenis') ?: '';
 
-        $where = "WHERE t.created_at::date BETWEEN '{$filterStart}' AND '{$filterEnd}'";
-        if ($filterTipe) $where .= " AND a.tipe = '{$filterTipe}'";
-        if ($filterJenis) $where .= " AND t.tipe = '{$filterJenis}'";
-        if ($sekolah && $sekolah !== 'admin') $where .= " AND a.sekolah = '" . $db->escapeString($sekolah) . "'";
+        $taModel = new \App\Models\AcademicYearModel();
+        $activeTa = $taModel->where('aktif', 1)->first();
+        $taId = $activeTa ? (int)$activeTa['id'] : 0;
+        $taLabel = $activeTa['tahun_ajaran'] ?? '-';
 
-        $rows = $db->query("
-            SELECT t.*, a.no_rekening, a.tipe as akun_tipe, a.sekolah,
-                   COALESCE(s.nama, g.nama, n.nama) as nama_pemilik
-            FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            LEFT JOIN tb_siswa s ON s.id = a.siswa_id
-            LEFT JOIN tb_guru g ON g.id = a.guru_id
-            LEFT JOIN tb_nasabah n ON n.id = a.nasabah_id
-            {$where}
-            ORDER BY t.created_at DESC
+        $schoolFilter = '';
+        if ($sekolah && $sekolah !== 'admin') {
+            $schoolFilter = "AND k.sekolah = '" . $db->escapeString($sekolah) . "'";
+        }
+
+        $allSiswa = $db->query("
+            SELECT s.id as siswa_id, s.nama, s.nis, s.kelas_id,
+                   k.nama_kelas, k.sekolah as kelas_sekolah, k.tingkat,
+                   t.id as tabungan_id, t.no_rekening, t.saldo
+            FROM tb_siswa s
+            JOIN tb_kelas k ON k.id = s.kelas_id
+            LEFT JOIN tb_tabungan t ON t.siswa_id = s.id AND t.tipe = 'siswa' AND t.aktif = 1
+            WHERE s.tahun_ajaran_id = {$taId} AND s.aktif = 1 {$schoolFilter}
+            ORDER BY
+                CASE WHEN k.sekolah = 'ra' THEN 1 WHEN k.sekolah = 'sd' THEN 2 WHEN k.sekolah = 'smp' THEN 3 ELSE 4 END,
+                k.tingkat, k.nama_kelas, s.nis
         ")->getResultArray();
 
-        $summary = $db->query("
-            SELECT
-                COUNT(*) as total_transaksi,
-                COALESCE(SUM(CASE WHEN t.tipe = 'setor' THEN t.nominal ELSE 0 END), 0) as total_setor,
-                COALESCE(SUM(CASE WHEN t.tipe = 'tarik' THEN t.nominal ELSE 0 END), 0) as total_tarik
+        $classGroups = [];
+        foreach ($allSiswa as $s) {
+            $kid = $s['kelas_id'];
+            if (!isset($classGroups[$kid])) {
+                $classGroups[$kid] = [
+                    'nama' => $s['nama_kelas'],
+                    'sekolah' => $s['kelas_sekolah'],
+                    'tingkat' => (int)$s['tingkat'],
+                    'students' => [],
+                ];
+            }
+            $classGroups[$kid]['students'][] = $s;
+        }
+
+        $tabunganIds = array_filter(array_map(fn($s) => $s['tabungan_id'] ?? null, $allSiswa));
+        $tabunganIdList = !empty($tabunganIds) ? implode(',', $tabunganIds) : '0';
+
+        $txRows = $db->query("
+            SELECT t.akun_id, t.tipe, t.nominal, t.created_at::date as tgl
             FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            {$where}
-        ")->getRowArray();
+            WHERE t.created_at::date BETWEEN '{$filterStart}' AND '{$filterEnd}'
+              AND t.akun_id IN ({$tabunganIdList})
+        ")->getResultArray();
+
+        $txByAkun = [];
+        $allDates = [];
+        foreach ($txRows as $tx) {
+            $aid = (int)$tx['akun_id'];
+            $tgl = (string)$tx['tgl'];
+            if (!isset($txByAkun[$aid])) $txByAkun[$aid] = [];
+            if (!isset($txByAkun[$aid][$tgl])) $txByAkun[$aid][$tgl] = ['setor' => 0, 'tarik' => 0];
+            $txByAkun[$aid][$tgl][$tx['tipe']] += (float)$tx['nominal'];
+            if (!in_array($tgl, $allDates)) $allDates[] = $tgl;
+        }
+        sort($allDates);
+
+        $openingBalances = [];
+        if ($tabunganIdList !== '0') {
+            $obRows = $db->query("
+                SELECT DISTINCT ON (akun_id) akun_id, saldo_sesudah
+                FROM tb_transaksi_tabungan
+                WHERE created_at::date < '{$filterStart}' AND akun_id IN ({$tabunganIdList})
+                ORDER BY akun_id, created_at DESC
+            ")->getResultArray();
+            foreach ($obRows as $ob) {
+                $openingBalances[(int)$ob['akun_id']] = (float)$ob['saldo_sesudah'];
+            }
+        }
 
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Rekap Tabungan');
+        $spreadsheet->removeSheetByIndex(0);
 
-        $titleFont = ['font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E293B']], 'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER]];
-        $headerFont = ['font' => ['bold' => true, 'size' => 10, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '475569']], 'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER], 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]];
-        $dataFont = ['font' => ['bold' => false, 'size' => 10], 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]];
-        $totalFont = ['font' => ['bold' => true, 'size' => 10], 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]]];
+        $titleStyle = [
+            'font' => ['bold' => true, 'size' => 13, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E293B']],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+        ];
+        $headerStyle = [
+            'font' => ['bold' => true, 'size' => 9, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '475569']],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+        $subHeaderStyle = [
+            'font' => ['bold' => true, 'size' => 8, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '64748B']],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER, 'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+        $dataStyle = [
+            'font' => ['size' => 9],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+        $dataNumStyle = array_merge($dataStyle, [
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT],
+        ]);
+        $totalStyle = [
+            'font' => ['bold' => true, 'size' => 9],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F1F5F9']],
+            'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
+        ];
+        $totalNumStyle = array_merge($totalStyle, [
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_RIGHT],
+        ]);
 
-        $sheet->mergeCells('A1:G1');
-        $sheet->setCellValue('A1', 'REKAP TABUNGAN ' . $filterStart . ' s/d ' . $filterEnd);
-        $sheet->getStyle('A1')->applyFromArray($titleFont);
-        $sheet->getRowDimension('1')->setRowHeight(35);
+        $dateCount = count($allDates);
+        $dateColsCount = $dateCount * 2;
+        $fixedColsCount = 4;
+        $endColsCount = 3;
+        $totalCols = $fixedColsCount + $dateColsCount + $endColsCount;
 
-        $row = 3;
-        $sheet->setCellValue('A' . $row, 'Total Transaksi: ' . number_format($summary['total_transaksi'] ?? 0, 0, ',', '.'));
-        $sheet->setCellValue('C' . $row, 'Total Setoran: Rp ' . number_format($summary['total_setor'] ?? 0, 0, ',', '.'));
-        $sheet->setCellValue('E' . $row, 'Total Penarikan: Rp ' . number_format($summary['total_tarik'] ?? 0, 0, ',', '.'));
-        $sheet->getStyle('A' . $row)->applyFromArray($totalFont);
-        $sheet->getStyle('C' . $row)->applyFromArray($totalFont);
-        $sheet->getStyle('E' . $row)->applyFromArray($totalFont);
-        $row += 2;
-
-        $cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-        $widths = [18, 16, 22, 14, 14, 16, 30];
-        $headers = ['Tanggal', 'No. Rekening', 'Pemilik', 'Tipe', 'Metode', 'Nominal', 'Catatan'];
-        foreach ($headers as $i => $h) {
-            $sheet->getColumnDimension($cols[$i])->setWidth($widths[$i]);
-            $sheet->setCellValue($cols[$i] . $row, $h);
-            $sheet->getStyle($cols[$i] . $row)->applyFromArray($headerFont);
+        function colLetter(int $idx): string
+        {
+            $letter = '';
+            while ($idx > 0) {
+                $idx--;
+                $letter = chr(65 + ($idx % 26)) . $letter;
+                $idx = intdiv($idx, 26);
+            }
+            return $letter;
         }
-        $row++;
 
-        foreach ($rows as $r) {
-            $tipe = $r['tipe'] === 'setor' ? 'Setoran' : 'Penarikan';
-            $metode = $r['metode'] === 'transfer' ? 'Transfer' : ($r['metode'] === 'tunai' ? 'Tunai' : '-');
-            $nominal = $r['tipe'] === 'setor' ? (float)$r['nominal'] : -(float)$r['nominal'];
-            $akunTipe = $r['akun_tipe'] === 'siswa' ? 'Siswa' : ($r['akun_tipe'] === 'guru' ? 'Guru' : 'Non Civitas');
+        foreach ($classGroups as $kelas) {
+            $sheetName = mb_substr($kelas['nama'], 0, 31);
+            $sheet = new \PhpOffice\PhpSpreadsheet\Worksheet\Worksheet($spreadsheet, $sheetName);
+            $spreadsheet->addSheet($sheet);
 
-            $sheet->setCellValue('A' . $row, date('d/m/Y H:i', strtotime($r['created_at'])));
-            $sheet->setCellValue('B' . $row, $r['no_rekening']);
-            $sheet->setCellValue('C' . $row, ($r['nama_pemilik'] ?? '-') . ' (' . $akunTipe . ')');
-            $sheet->setCellValue('D' . $row, $tipe);
-            $sheet->setCellValue('E' . $row, $metode);
-            $sheet->setCellValue('F' . $row, $nominal);
-            $sheet->getStyle('F' . $row)->getNumberFormat()->setFormatCode('#,##0');
-            $sheet->setCellValue('G' . $row, $r['catatan'] ?? '-');
-            $sheet->getStyle('A' . $row . ':G' . $row)->applyFromArray($dataFont);
-            $row++;
+            $lastCol = colLetter($totalCols);
+
+            $sheet->mergeCells("A1:{$lastCol}1");
+            $sheet->setCellValue('A1', 'REKAP TABUNGAN ' . $kelas['nama'] . ' - ' . $taLabel);
+            $sheet->getStyle('A1')->applyFromArray($titleStyle);
+            $sheet->getRowDimension('1')->setRowHeight(30);
+
+            $sheet->mergeCells("A2:{$lastCol}2");
+            $sheet->setCellValue('A2', 'Periode: ' . $filterStart . ' s/d ' . $filterEnd . '  |  Jumlah Siswa: ' . count($kelas['students']));
+            $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(9)->setColor(['rgb' => '475569']);
+
+            $hRow1 = 4;
+            $hRow2 = 5;
+
+            $fixedHeaders = ['No', 'Nama', 'NIS', 'Saldo Awal'];
+            foreach ($fixedHeaders as $i => $h) {
+                $cl = colLetter($i + 1);
+                $sheet->mergeCells($cl . $hRow1 . ':' . $cl . $hRow2);
+                $sheet->setCellValue($cl . $hRow1, $h);
+                $sheet->getStyle($cl . $hRow1)->applyFromArray($headerStyle);
+                $sheet->getStyle($cl . $hRow2)->applyFromArray($headerStyle);
+            }
+
+            $colIdx = $fixedColsCount + 1;
+            foreach ($allDates as $d) {
+                $cl1 = colLetter($colIdx);
+                $cl2 = colLetter($colIdx + 1);
+                $dateLabel = date('d/m', strtotime($d));
+                $sheet->mergeCells($cl1 . $hRow1 . ':' . $cl2 . $hRow1);
+                $sheet->setCellValue($cl1 . $hRow1, $dateLabel);
+                $sheet->getStyle($cl1 . $hRow1)->applyFromArray($headerStyle);
+
+                $sheet->setCellValue($cl1 . $hRow2, 'D');
+                $sheet->getStyle($cl1 . $hRow2)->applyFromArray($subHeaderStyle);
+                $sheet->setCellValue($cl2 . $hRow2, 'K');
+                $sheet->getStyle($cl2 . $hRow2)->applyFromArray($subHeaderStyle);
+                $colIdx += 2;
+            }
+
+            $endStartCol = $fixedColsCount + $dateColsCount + 1;
+            $endHeaders = ['Total D', 'Total K', 'Saldo Akhir'];
+            foreach ($endHeaders as $i => $h) {
+                $cl = colLetter($endStartCol + $i);
+                $sheet->mergeCells($cl . $hRow1 . ':' . $cl . $hRow2);
+                $sheet->setCellValue($cl . $hRow1, $h);
+                $sheet->getStyle($cl . $hRow1)->applyFromArray($headerStyle);
+                $sheet->getStyle($cl . $hRow2)->applyFromArray($headerStyle);
+            }
+
+            $dataRow = 6;
+            $sumSaldoAwal = 0;
+            $sumTotalD = 0;
+            $sumTotalK = 0;
+            $sumSaldoAkhir = 0;
+            $dateTotals = array_fill_keys($allDates, ['setor' => 0, 'tarik' => 0]);
+
+            foreach ($kelas['students'] as $i => $siswa) {
+                $tabId = $siswa['tabungan_id'] ? (int)$siswa['tabungan_id'] : null;
+                $saldoAwal = $tabId ? ($openingBalances[$tabId] ?? 0) : 0;
+
+                $sheet->setCellValue('A' . $dataRow, $i + 1);
+                $sheet->getStyle('A' . $dataRow)->applyFromArray(array_merge($dataStyle, ['alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER]]));
+
+                $sheet->setCellValue('B' . $dataRow, $siswa['nama']);
+                $sheet->getStyle('B' . $dataRow)->applyFromArray($dataStyle);
+
+                $sheet->setCellValue('C' . $dataRow, $siswa['nis'] ?? '-');
+                $sheet->getStyle('C' . $dataRow)->applyFromArray($dataStyle);
+
+                $sheet->setCellValue('D' . $dataRow, $saldoAwal);
+                $sheet->getStyle('D' . $dataRow)->applyFromArray($dataNumStyle);
+                $sheet->getStyle('D' . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+                $totalD = 0;
+                $totalK = 0;
+                $colIdx = $fixedColsCount + 1;
+                foreach ($allDates as $d) {
+                    $setor = ($tabId && isset($txByAkun[$tabId][$d])) ? $txByAkun[$tabId][$d]['setor'] : 0;
+                    $tarik = ($tabId && isset($txByAkun[$tabId][$d])) ? $txByAkun[$tabId][$d]['tarik'] : 0;
+                    $totalD += $setor;
+                    $totalK += $tarik;
+                    $dateTotals[$d]['setor'] += $setor;
+                    $dateTotals[$d]['tarik'] += $tarik;
+
+                    $clD = colLetter($colIdx);
+                    $clK = colLetter($colIdx + 1);
+                    $sheet->setCellValue($clD . $dataRow, $setor > 0 ? $setor : null);
+                    $sheet->getStyle($clD . $dataRow)->applyFromArray($dataNumStyle);
+                    $sheet->getStyle($clD . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->setCellValue($clK . $dataRow, $tarik > 0 ? $tarik : null);
+                    $sheet->getStyle($clK . $dataRow)->applyFromArray($dataNumStyle);
+                    $sheet->getStyle($clK . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+                    $colIdx += 2;
+                }
+
+                $saldoAkhir = $saldoAwal + $totalD - $totalK;
+
+                $clTD = colLetter($endStartCol);
+                $sheet->setCellValue($clTD . $dataRow, $totalD > 0 ? $totalD : null);
+                $sheet->getStyle($clTD . $dataRow)->applyFromArray($dataNumStyle);
+                $sheet->getStyle($clTD . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+                $clTK = colLetter($endStartCol + 1);
+                $sheet->setCellValue($clTK . $dataRow, $totalK > 0 ? $totalK : null);
+                $sheet->getStyle($clTK . $dataRow)->applyFromArray($dataNumStyle);
+                $sheet->getStyle($clTK . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+                $clSA = colLetter($endStartCol + 2);
+                $sheet->setCellValue($clSA . $dataRow, $saldoAkhir);
+                $sheet->getStyle($clSA . $dataRow)->applyFromArray($dataNumStyle);
+                $sheet->getStyle($clSA . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+                $sumSaldoAwal += $saldoAwal;
+                $sumTotalD += $totalD;
+                $sumTotalK += $totalK;
+                $sumSaldoAkhir += $saldoAkhir;
+                $dataRow++;
+            }
+
+            $sheet->mergeCells('A' . $dataRow . ':C' . $dataRow);
+            $sheet->setCellValue('A' . $dataRow, 'TOTAL');
+            $sheet->getStyle('A' . $dataRow)->applyFromArray(array_merge($totalStyle, ['alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER]]));
+            for ($c = 1; $c <= 3; $c++) {
+                $sheet->getStyle(colLetter($c) . $dataRow)->applyFromArray($totalStyle);
+            }
+
+            $sheet->setCellValue('D' . $dataRow, $sumSaldoAwal);
+            $sheet->getStyle('D' . $dataRow)->applyFromArray($totalNumStyle);
+            $sheet->getStyle('D' . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+            $colIdx = $fixedColsCount + 1;
+            foreach ($allDates as $d) {
+                $clD = colLetter($colIdx);
+                $clK = colLetter($colIdx + 1);
+                $ds = $dateTotals[$d]['setor'];
+                $dk = $dateTotals[$d]['tarik'];
+                $sheet->setCellValue($clD . $dataRow, $ds > 0 ? $ds : null);
+                $sheet->getStyle($clD . $dataRow)->applyFromArray($totalNumStyle);
+                $sheet->getStyle($clD . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->setCellValue($clK . $dataRow, $dk > 0 ? $dk : null);
+                $sheet->getStyle($clK . $dataRow)->applyFromArray($totalNumStyle);
+                $sheet->getStyle($clK . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+                $colIdx += 2;
+            }
+
+            $sheet->setCellValue(colLetter($endStartCol) . $dataRow, $sumTotalD);
+            $sheet->getStyle(colLetter($endStartCol) . $dataRow)->applyFromArray($totalNumStyle);
+            $sheet->getStyle(colLetter($endStartCol) . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+            $sheet->setCellValue(colLetter($endStartCol + 1) . $dataRow, $sumTotalK);
+            $sheet->getStyle(colLetter($endStartCol + 1) . $dataRow)->applyFromArray($totalNumStyle);
+            $sheet->getStyle(colLetter($endStartCol + 1) . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+            $sheet->setCellValue(colLetter($endStartCol + 2) . $dataRow, $sumSaldoAkhir);
+            $sheet->getStyle(colLetter($endStartCol + 2) . $dataRow)->applyFromArray($totalNumStyle);
+            $sheet->getStyle(colLetter($endStartCol + 2) . $dataRow)->getNumberFormat()->setFormatCode('#,##0');
+
+            $sheet->getColumnDimension('A')->setWidth(5);
+            $sheet->getColumnDimension('B')->setWidth(25);
+            $sheet->getColumnDimension('C')->setWidth(15);
+            $sheet->getColumnDimension('D')->setWidth(14);
+            $colIdx = $fixedColsCount + 1;
+            foreach ($allDates as $d) {
+                $sheet->getColumnDimension(colLetter($colIdx))->setWidth(10);
+                $sheet->getColumnDimension(colLetter($colIdx + 1))->setWidth(10);
+                $colIdx += 2;
+            }
+            for ($c = $endStartCol; $c <= $endStartCol + 2; $c++) {
+                $sheet->getColumnDimension(colLetter($c))->setWidth(13);
+            }
+
+            $sheet->freezePane('E6');
+            $sheet->setActiveCell('A1');
         }
 
         $filename = 'REKAP_TABUNGAN_' . $filterStart . '_sd_' . $filterEnd . '.xlsx';
