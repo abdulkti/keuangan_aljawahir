@@ -40,6 +40,12 @@
               <option value="<?= $t ?>" <?= $tahunFilter == $t ? 'selected' : '' ?>><?= $t ?></option>
               <?php endforeach; ?>
             </select>
+            <select name="bulan" class="ku-filter-select" onchange="this.form.submit()">
+              <option value="">Semua Bulan</option>
+              <?php foreach ($bulanList as $bk => $bv): ?>
+              <option value="<?= $bk ?>" <?= ($bulanFilter ?? '') == $bk ? 'selected' : '' ?>><?= $bv ?></option>
+              <?php endforeach; ?>
+            </select>
           </form>
         </div>
         <div class="ku-toolbar-right">

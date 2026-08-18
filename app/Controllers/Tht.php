@@ -18,6 +18,7 @@ class Tht extends BaseController
 
         $search = $this->request->getGet('search') ?? '';
         $tahunFilter = $this->request->getGet('tahun') ?? '';
+        $bulanFilter = $this->request->getGet('bulan') ?? '';
         $guruList = $guruModel->getWithUnit();
         $allTransaksi = $thtModel->getWithGuru();
 
@@ -46,6 +47,29 @@ class Tht extends BaseController
             $tahunFilter = $tahunList[0];
         }
 
+        // Build month list for selected academic year
+        $bulanNames = [
+            '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+            '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+            '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember',
+        ];
+        $bulanList = [];
+        // Academic year YYYY-(YYYY+1) means months: Jul-Dec of YYYY, Jan-Jun of YYYY+1
+        // Parse year range
+        $taParts = explode('-', $tahunFilter);
+        if (count($taParts) === 2) {
+            $taStart = (int)$taParts[0];
+            $taEnd = (int)$taParts[1];
+            for ($m = 7; $m <= 12; $m++) {
+                $mm = str_pad($m, 2, '0', STR_PAD_LEFT);
+                $bulanList[$mm] = $bulanNames[$mm] . ' ' . $taStart;
+            }
+            for ($m = 1; $m <= 6; $m++) {
+                $mm = str_pad($m, 2, '0', STR_PAD_LEFT);
+                $bulanList[$mm] = $bulanNames[$mm] . ' ' . $taEnd;
+            }
+        }
+
         // Filter transactions by academic year
         $transaksi = [];
         foreach ($allTransaksi as $t) {
@@ -53,6 +77,7 @@ class Tht extends BaseController
             $bln = (int) date('m', strtotime($t['tanggal']));
             $ta = $bln >= 7 ? ($thn . '-' . ($thn + 1)) : (($thn - 1) . '-' . $thn);
             if ($tahunFilter && $ta !== $tahunFilter) continue;
+            if ($bulanFilter && str_pad($bln, 2, '0', STR_PAD_LEFT) !== $bulanFilter) continue;
             $transaksi[] = $t;
         }
 
@@ -95,6 +120,8 @@ class Tht extends BaseController
             'search' => $search,
             'tahunFilter' => $tahunFilter,
             'tahunList' => $tahunList,
+            'bulanFilter' => $bulanFilter,
+            'bulanList' => $bulanList,
         ];
 
         return $this->render('superadmin/tht', $data);
