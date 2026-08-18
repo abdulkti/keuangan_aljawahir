@@ -489,82 +489,91 @@ class Tabungan extends BaseController
 
         $filterStart = $this->request->getGet('start') ?: date('Y-m-01');
         $filterEnd = $this->request->getGet('end') ?: date('Y-m-d');
-        $filterTipe = $this->request->getGet('tipe_akun') ?: '';
-        $filterJenis = $this->request->getGet('jenis') ?: '';
 
-        $where = "WHERE t.created_at::date BETWEEN '{$filterStart}' AND '{$filterEnd}'";
-        if ($filterTipe) {
-            $where .= " AND a.tipe = '{$filterTipe}'";
-        }
-        if ($filterJenis) {
-            $where .= " AND t.tipe = '{$filterJenis}'";
-        }
+        $taModel = new \App\Models\AcademicYearModel();
+        $activeTa = $taModel->where('aktif', 1)->first();
+        $taId = $activeTa ? (int)$activeTa['id'] : 0;
+        $taLabel = $activeTa['tahun_ajaran'] ?? '-';
+
+        $schoolFilter = '';
         if ($sekolah && $sekolah !== 'admin') {
-            $where .= " AND a.sekolah = '" . $db->escapeString($sekolah) . "'";
+            $schoolFilter = "AND k.sekolah = '" . $db->escapeString($sekolah) . "'";
         }
 
-        // Detail transaksi
-        $rows = $db->query("
-            SELECT t.*, a.no_rekening, a.tipe as akun_tipe, a.sekolah,
-                   COALESCE(s.nama, g.nama, n.nama) as nama_pemilik
-            FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            LEFT JOIN tb_siswa s ON s.id = a.siswa_id
-            LEFT JOIN tb_guru g ON g.id = a.guru_id
-            LEFT JOIN tb_nasabah n ON n.id = a.nasabah_id
-            {$where}
-            ORDER BY t.created_at DESC
+        $allSiswa = $db->query("
+            SELECT s.id as siswa_id, s.nama, s.nis, s.kelas_id,
+                   k.nama_kelas, k.sekolah as kelas_sekolah, k.tingkat,
+                   t.id as tabungan_id, t.no_rekening, t.saldo
+            FROM tb_siswa s
+            JOIN tb_kelas k ON k.id = s.kelas_id
+            LEFT JOIN tb_tabungan t ON t.siswa_id = s.id AND t.tipe = 'siswa' AND t.aktif = 1
+            WHERE s.tahun_ajaran_id = {$taId} AND s.aktif = 1 {$schoolFilter}
+            ORDER BY
+                CASE WHEN k.sekolah = 'ra' THEN 1 WHEN k.sekolah = 'sd' THEN 2 WHEN k.sekolah = 'smp' THEN 3 ELSE 4 END,
+                k.tingkat, k.nama_kelas, s.nis
         ")->getResultArray();
 
-        // Rekapitulasi
-        $summary = $db->query("
-            SELECT
-                COUNT(*) as total_transaksi,
-                COUNT(DISTINCT a.id) as total_akun,
-                COALESCE(SUM(CASE WHEN t.tipe = 'setor' THEN t.nominal ELSE 0 END), 0) as total_setor,
-                COALESCE(SUM(CASE WHEN t.tipe = 'tarik' THEN t.nominal ELSE 0 END), 0) as total_tarik,
-                COALESCE(SUM(t.nominal), 0) as total_keseluruhan
-            FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            {$where}
-        ")->getRowArray();
+        $classGroups = [];
+        foreach ($allSiswa as $s) {
+            $kid = $s['kelas_id'];
+            if (!isset($classGroups[$kid])) {
+                $classGroups[$kid] = [
+                    'nama' => $s['nama_kelas'],
+                    'sekolah' => $s['kelas_sekolah'],
+                    'tingkat' => (int)$s['tingkat'],
+                    'students' => [],
+                ];
+            }
+            $classGroups[$kid]['students'][] = $s;
+        }
 
-        // Per metode
-        $perMetode = $db->query("
-            SELECT
-                t.metode,
-                COUNT(*) as jumlah,
-                COALESCE(SUM(t.nominal), 0) as total
+        $tabunganIds = array_filter(array_map(fn($s) => $s['tabungan_id'] ?? null, $allSiswa));
+        $tabunganIdList = !empty($tabunganIds) ? implode(',', $tabunganIds) : '0';
+
+        $txRows = $db->query("
+            SELECT t.akun_id, t.tipe, t.nominal, t.created_at::date as tgl
             FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            {$where}
-            GROUP BY t.metode
-            ORDER BY t.metode
+            WHERE t.created_at::date BETWEEN '{$filterStart}' AND '{$filterEnd}'
+              AND t.akun_id IN ({$tabunganIdList})
         ")->getResultArray();
 
-        // Per tipe akun
-        $perTipeAkun = $db->query("
-            SELECT
-                a.tipe,
-                COUNT(*) as jumlah,
-                COALESCE(SUM(t.nominal), 0) as total
-            FROM tb_transaksi_tabungan t
-            JOIN tb_tabungan a ON a.id = t.akun_id
-            {$where}
-            GROUP BY a.tipe
-            ORDER BY a.tipe
-        ")->getResultArray();
+        $txByAkun = [];
+        $allDates = [];
+        foreach ($txRows as $tx) {
+            $aid = (int)$tx['akun_id'];
+            $tgl = (string)$tx['tgl'];
+            if (!isset($txByAkun[$aid])) $txByAkun[$aid] = [];
+            if (!isset($txByAkun[$aid][$tgl])) $txByAkun[$aid][$tgl] = ['setor' => 0, 'tarik' => 0];
+            $txByAkun[$aid][$tgl][$tx['tipe']] += (float)$tx['nominal'];
+            if (!in_array($tgl, $allDates)) $allDates[] = $tgl;
+        }
+        sort($allDates);
+
+        $openingBalances = [];
+        if ($tabunganIdList !== '0') {
+            $obRows = $db->query("
+                SELECT DISTINCT ON (akun_id) akun_id, saldo_sesudah
+                FROM tb_transaksi_tabungan
+                WHERE created_at::date < '{$filterStart}' AND akun_id IN ({$tabunganIdList})
+                ORDER BY akun_id, created_at DESC
+            ")->getResultArray();
+            foreach ($obRows as $ob) {
+                $openingBalances[(int)$ob['akun_id']] = (float)$ob['saldo_sesudah'];
+            }
+        }
+
+        $grandTotalSetor = 0;
+        $grandTotalTarik = 0;
 
         $data = [
             'activeMenu' => 'tabungan-rekap',
-            'rows' => $rows,
-            'summary' => $summary,
-            'perMetode' => $perMetode,
-            'perTipeAkun' => $perTipeAkun,
+            'classGroups' => $classGroups,
+            'allDates' => $allDates,
+            'txByAkun' => $txByAkun,
+            'openingBalances' => $openingBalances,
+            'taLabel' => $taLabel,
             'filterStart' => $filterStart,
             'filterEnd' => $filterEnd,
-            'filterTipe' => $filterTipe,
-            'filterJenis' => $filterJenis,
         ];
 
         return $this->render('tabungan/rekap', $data);
