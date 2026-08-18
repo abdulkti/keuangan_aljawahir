@@ -312,11 +312,11 @@ class Rekap extends BaseController
 
         $transactions = $thtModel->select('tb_transaksi_tht.*, tb_guru.nama as guru_nama')
             ->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id')
-            ->where('tipe', 'setoran')
             ->orderBy('tb_guru.nama, tanggal', 'ASC')
             ->findAll();
 
         $yearData = [];
+        $yearDataPenarikan = [];
         $allYears = [];
 
         foreach ($transactions as $t) {
@@ -328,13 +328,16 @@ class Rekap extends BaseController
             if (!in_array($ta, $allYears)) {
                 $allYears[] = $ta;
             }
-            if (!isset($yearData[$ta])) {
-                $yearData[$ta] = [];
+
+            $target = $t['tipe'] === 'setoran' ? $yearData : $yearDataPenarikan;
+
+            if (!isset($target[$ta])) {
+                $target[$ta] = [];
             }
-            if (!isset($yearData[$ta][$nama])) {
-                $yearData[$ta][$nama] = array_fill(1, 12, 0);
+            if (!isset($target[$ta][$nama])) {
+                $target[$ta][$nama] = array_fill(1, 12, 0);
             }
-            $yearData[$ta][$nama][$bln] += (float) $t['jumlah'];
+            $target[$ta][$nama][$bln] += (float) $t['jumlah'];
         }
         sort($allYears);
 
@@ -475,11 +478,20 @@ class Rekap extends BaseController
 
         // REKAP-GURU
         $guruYearMatrix = [];
+        $guruYearPenarikan = [];
         foreach ($yearData as $ta => $guruData) {
             foreach ($guruData as $nama => $monthly) {
                 $total = array_sum($monthly);
                 if ($total > 0) {
                     $guruYearMatrix[$ta][$nama] = $total;
+                }
+            }
+        }
+        foreach ($yearDataPenarikan as $ta => $guruData) {
+            foreach ($guruData as $nama => $monthly) {
+                $total = array_sum($monthly);
+                if ($total > 0) {
+                    $guruYearPenarikan[$ta][$nama] = $total;
                 }
             }
         }
@@ -508,49 +520,98 @@ class Rekap extends BaseController
         $maxColIdx = $colIdx;
 
         $row = 5;
+        $grandIuran = [];
+        $grandRealisasi = [];
         foreach ($allYears as $ta) {
+            // Baris Iuran
             $sheet->setCellValue('A' . $row, $ta);
-            $colIdx = 2;
+            $sheet->setCellValue('B' . $row, 'Iuran');
+            $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+            $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('006633'));
+            $colIdx = 3;
             foreach ($guruNames as $nama) {
                 $val = $guruYearMatrix[$ta][$nama] ?? 0;
                 $col = Coordinate::stringFromColumnIndex($colIdx);
                 if ($val > 0) {
                     $sheet->setCellValue($col . $row, $this->formatRp($val));
+                    $grandIuran[$nama] = ($grandIuran[$nama] ?? 0) + $val;
                 } else {
                     $sheet->setCellValue($col . $row, '-');
                 }
                 $colIdx++;
             }
             $row++;
+
+            // Baris Realisasi
+            $hasRealisasi = false;
+            foreach ($guruNames as $nama) {
+                if (($guruYearPenarikan[$ta][$nama] ?? 0) > 0) {
+                    $hasRealisasi = true;
+                    break;
+                }
+            }
+            if ($hasRealisasi) {
+                $sheet->setCellValue('B' . $row, 'Realisasi');
+                $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+                $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('CC3333'));
+                $colIdx = 3;
+                foreach ($guruNames as $nama) {
+                    $val = $guruYearPenarikan[$ta][$nama] ?? 0;
+                    $col = Coordinate::stringFromColumnIndex($colIdx);
+                    if ($val > 0) {
+                        $sheet->setCellValue($col . $row, $this->formatRp($val));
+                        $grandRealisasi[$nama] = ($grandRealisasi[$nama] ?? 0) + $val;
+                    } else {
+                        $sheet->setCellValue($col . $row, '-');
+                    }
+                    $colIdx++;
+                }
+                $row++;
+            }
         }
 
         $lastDataRow = $row - 1;
 
-        // Grand total row
-        $sheet->setCellValue('A' . $row, '');
-        $sheet->getStyle('A' . $row)->getFont()->setBold(true);
-        $colIdx = 2;
+        // Grand total rows
+        $sheet->setCellValue('A' . $row, 'JUMLAH');
+        $sheet->getStyle('A' . $row . ':A' . ($row + 1))->getFont()->setBold(true);
+        $sheet->setCellValue('B' . $row, 'Iuran');
+        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+        $colIdx = 3;
         $grandTotalAll = 0;
         foreach ($guruNames as $nama) {
-            $total = 0;
-            foreach ($allYears as $ta) {
-                $total += $guruYearMatrix[$ta][$nama] ?? 0;
-            }
             $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . $row, $this->formatRp($total));
+            $sheet->setCellValue($col . $row, $this->formatRp($grandIuran[$nama] ?? 0));
             $sheet->getStyle($col . $row)->getFont()->setBold(true);
-            $grandTotalAll += $total;
+            $grandTotalAll += ($grandIuran[$nama] ?? 0);
             $colIdx++;
         }
         $col = Coordinate::stringFromColumnIndex($colIdx);
         $sheet->setCellValue($col . $row, $this->formatRp($grandTotalAll));
+        $sheet->getStyle($col . $row)->getFont()->setBold(true);
+        $row++;
+
+        $sheet->setCellValue('B' . $row, 'Realisasi');
+        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+        $colIdx = 3;
+        $grandTotalAllR = 0;
+        foreach ($guruNames as $nama) {
+            $col = Coordinate::stringFromColumnIndex($colIdx);
+            $sheet->setCellValue($col . $row, $this->formatRp($grandRealisasi[$nama] ?? 0));
+            $sheet->getStyle($col . $row)->getFont()->setBold(true);
+            $grandTotalAllR += ($grandRealisasi[$nama] ?? 0);
+            $colIdx++;
+        }
+        $col = Coordinate::stringFromColumnIndex($colIdx);
+        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalAllR));
         $sheet->getStyle($col . $row)->getFont()->setBold(true);
         $lastRow = $row;
 
         $sheet->getStyle("A4:" . Coordinate::stringFromColumnIndex($maxColIdx) . "$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
         $sheet->getColumnDimension('A')->setWidth(15);
-        for ($c = 2; $c <= $maxColIdx; $c++) {
+        $sheet->getColumnDimension('B')->setWidth(12);
+        for ($c = 3; $c <= $maxColIdx; $c++) {
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
         }
 
