@@ -543,31 +543,22 @@ class Rekap extends BaseController
             $row++;
 
             // Baris Realisasi
-            $hasRealisasi = false;
+            $sheet->setCellValue('B' . $row, 'Realisasi');
+            $sheet->getStyle('B' . $row)->getFont()->setBold(true);
+            $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('CC3333'));
+            $colIdx = 3;
             foreach ($guruNames as $nama) {
-                if (($guruYearPenarikan[$ta][$nama] ?? 0) > 0) {
-                    $hasRealisasi = true;
-                    break;
+                $val = $guruYearPenarikan[$ta][$nama] ?? 0;
+                $col = Coordinate::stringFromColumnIndex($colIdx);
+                if ($val > 0) {
+                    $sheet->setCellValue($col . $row, $this->formatRp($val));
+                    $grandRealisasi[$nama] = ($grandRealisasi[$nama] ?? 0) + $val;
+                } else {
+                    $sheet->setCellValue($col . $row, '-');
                 }
+                $colIdx++;
             }
-            if ($hasRealisasi) {
-                $sheet->setCellValue('B' . $row, 'Realisasi');
-                $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-                $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('CC3333'));
-                $colIdx = 3;
-                foreach ($guruNames as $nama) {
-                    $val = $guruYearPenarikan[$ta][$nama] ?? 0;
-                    $col = Coordinate::stringFromColumnIndex($colIdx);
-                    if ($val > 0) {
-                        $sheet->setCellValue($col . $row, $this->formatRp($val));
-                        $grandRealisasi[$nama] = ($grandRealisasi[$nama] ?? 0) + $val;
-                    } else {
-                        $sheet->setCellValue($col . $row, '-');
-                    }
-                    $colIdx++;
-                }
-                $row++;
-            }
+            $row++;
         }
 
         $lastDataRow = $row - 1;
