@@ -438,6 +438,8 @@ class Tabungan extends BaseController
 
         $savingsModel = new SavingsAccountModel();
         $nasabahModel = new NasabahModel();
+        $siswaModel = new StudentModel();
+        $guruModel = new TeacherModel();
         $noRekening = 'SAV-' . date('Ymd') . '-' . substr(md5(uniqid(mt_rand(), true)), 0, 8);
 
         $data = [
@@ -450,6 +452,10 @@ class Tabungan extends BaseController
 
         if ($tipe === 'siswa') {
             $data['siswa_id'] = $orangId;
+            $siswa = $siswaModel->find($orangId);
+            if ($siswa && !empty($siswa['sekolah'])) {
+                $data['sekolah'] = $siswa['sekolah'];
+            }
         } elseif ($tipe === 'nasabah') {
             $data['nasabah_id'] = $orangId;
             $nasabah = $nasabahModel->find($orangId);
@@ -458,6 +464,10 @@ class Tabungan extends BaseController
             }
         } else {
             $data['guru_id'] = $orangId;
+            $guru = $guruModel->find($orangId);
+            if ($guru && !empty($guru['sekolah'])) {
+                $data['sekolah'] = $guru['sekolah'];
+            }
         }
 
         $label = $tipe === 'siswa' ? 'siswa' : ($tipe === 'nasabah' ? 'nasabah' : 'guru');

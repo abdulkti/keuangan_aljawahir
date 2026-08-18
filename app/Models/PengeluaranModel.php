@@ -43,7 +43,7 @@ class PengeluaranModel extends Model
         return $this->findAll();
     }
 
-    private function _filterByTahunAjaran(&$model, $tahunAjaran, $bulan)
+    private function _filterByTahunAjaran($model, $tahunAjaran, $bulan)
     {
         if ($tahunAjaran) {
             $taParts = explode('-', $tahunAjaran);

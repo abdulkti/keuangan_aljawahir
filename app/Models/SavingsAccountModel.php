@@ -25,7 +25,6 @@ class SavingsAccountModel extends Model
             ->where('tb_tabungan.aktif', 1)
             ->where('tb_siswa.tahun_ajaran_id', $taId);
         if ($sekolah && $sekolah !== 'admin') {
-            $this->where('tb_tabungan.sekolah', $sekolah);
             $this->where('tb_siswa.sekolah', $sekolah);
         }
         if (!empty($filters['kelas_id'])) {
@@ -55,7 +54,6 @@ class SavingsAccountModel extends Model
             ->where('tb_tabungan.aktif', 1)
             ->where('tb_guru.tahun_ajaran_id', $taId);
         if ($sekolah && $sekolah !== 'admin') {
-            $this->where('tb_tabungan.sekolah', $sekolah);
             $this->where('tb_guru.sekolah', $sekolah);
         }
         if (!empty($filters['bidang'])) {
