@@ -362,7 +362,7 @@ class Rekap extends BaseController
 
         if ($bulan) {
             $blnInt = (int) $bulan;
-            $query->where('MONTH(tanggal)', $blnInt);
+            $query->where('EXTRACT(MONTH FROM tanggal)', $blnInt);
         }
 
         $transactions = $query->findAll();
