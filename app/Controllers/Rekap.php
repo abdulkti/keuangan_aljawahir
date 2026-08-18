@@ -425,7 +425,7 @@ class Rekap extends BaseController
             for ($r = 6; $r <= $lastRow; $r++) {
                 for ($c = 3; $c <= 15; $c++) {
                     $col = Coordinate::stringFromColumnIndex($c);
-                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('"Rp" #.##0');
                 }
             }
 
@@ -471,7 +471,7 @@ class Rekap extends BaseController
 
         $sheet->getStyle("A4:C$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         if ($lastRow >= 5) {
-            $sheet->getStyle("C5:C$lastRow")->getNumberFormat()->setFormatCode('#,##0');
+            $sheet->getStyle("C5:C$lastRow")->getNumberFormat()->setFormatCode('"Rp" #.##0');
         }
         $sheet->getColumnDimension('A')->setWidth(5);
         $sheet->getColumnDimension('B')->setWidth(15);
@@ -553,10 +553,10 @@ class Rekap extends BaseController
 
         $sheet->getStyle("A4:" . Coordinate::stringFromColumnIndex($maxColIdx) . "$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
         if ($lastDataRow >= 5) {
-            for ($r = 5; $r <= $lastDataRow; $r++) {
+            for ($r = 5; $r <= $lastRow; $r++) {
                 for ($c = 2; $c <= $maxColIdx; $c++) {
                     $col = Coordinate::stringFromColumnIndex($c);
-                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('#,##0');
+                    $sheet->getStyle("$col$r")->getNumberFormat()->setFormatCode('"Rp" #.##0');
                 }
             }
         }
