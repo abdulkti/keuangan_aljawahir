@@ -201,7 +201,7 @@ class Rekap extends BaseController
             return $this->exportKeuangan($rekapUnit, $rekapKategori, $allPemasukan, $allPengeluaran, $tahunAjaran, $bulan, $unitModel);
         }
         if ($this->request->getGet('export') === 'tht') {
-            return $this->exportTHT($rekapTahun, $rekapGuru, $grandTotalTHT, $thtModel, $guruModel, $unitModel);
+            return $this->exportTHT($thtModel, $guruModel, $unitModel, $tahunAjaran, $bulan);
         }
 
         $data = [
@@ -346,22 +346,26 @@ class Rekap extends BaseController
         return $this->response->download($tmpFile, null)->setFileName($filename);
     }
 
-    private function exportTHT($rekapTahun, $rekapGuru, $grandTotalTHT, $thtModel, $guruModel, $unitModel)
+    private function exportTHT($thtModel, $guruModel, $unitModel, $tahunAjaran = null, $bulan = null)
     {
         $spreadsheet = new Spreadsheet();
 
         $allGuru = $guruModel->getWithUnit();
         $guruInfo = [];
         foreach ($allGuru as $g) {
-            $guruInfo[$g['nama']] = $g['unit_nama'];
+            $guruInfo[$g['id']] = ['nama' => $g['nama'], 'unit' => $g['unit_nama'] ?? ''];
         }
-        $guruNames = array_keys($guruInfo);
-        sort($guruNames);
 
-        $transactions = $thtModel->select('tb_transaksi_tht.*, tb_guru.nama as guru_nama')
+        $query = $thtModel->select('tb_transaksi_tht.*, tb_guru.nama as guru_nama')
             ->join('tb_guru', 'tb_transaksi_tht.guru_id = tb_guru.id')
-            ->orderBy('tb_guru.nama, tanggal', 'ASC')
-            ->findAll();
+            ->orderBy('tb_guru.nama, tanggal', 'ASC');
+
+        if ($bulan) {
+            $blnInt = (int) $bulan;
+            $query->where('MONTH(tanggal)', $blnInt);
+        }
+
+        $transactions = $query->findAll();
 
         $yearData = [];
         $yearDataPenarikan = [];
@@ -371,6 +375,11 @@ class Rekap extends BaseController
             $thn = (int) date('Y', strtotime($t['tanggal']));
             $bln = (int) date('m', strtotime($t['tanggal']));
             $ta = $bln >= 7 ? ($thn . '-' . ($thn + 1)) : (($thn - 1) . '-' . $thn);
+
+            if ($tahunAjaran && $ta !== $tahunAjaran) {
+                continue;
+            }
+
             $nama = $t['guru_nama'];
 
             if (!in_array($ta, $allYears)) {
@@ -389,14 +398,17 @@ class Rekap extends BaseController
         }
         sort($allYears);
 
+        $guruNames = array_column($guruInfo, 'nama');
+        sort($guruNames);
+
         $monthNames = [1 => 'JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOPEMBER', 'DESEMBER'];
         $acadMonths = [7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5, 6];
 
-        $isFirst = true;
         if (empty($allYears)) {
-            $allYears[] = date('Y') . '-' . (date('Y') + 1);
+            $allYears[] = $tahunAjaran ?: date('Y') . '-' . (date('Y') + 1);
         }
 
+        $isFirst = true;
         foreach ($allYears as $ta) {
             $sheet = $isFirst ? $spreadsheet->getActiveSheet() : $spreadsheet->createSheet();
             $isFirst = false;
@@ -451,18 +463,13 @@ class Rekap extends BaseController
                     }
                     $ci++;
                 }
-                if ($totalSetoran > 0) {
-                    $sheet->setCellValue('O' . $row, $this->formatRp($totalSetoran));
-                }
+                $sheet->setCellValue('O' . $row, $this->formatRp($totalSetoran));
                 $saldo = $totalSetoran - $totalPenarikan;
-                if ($saldo != 0) {
-                    $sheet->setCellValue('P' . $row, $this->formatRp($saldo));
-                }
+                $sheet->setCellValue('P' . $row, $this->formatRp($saldo));
                 $no++;
                 $row++;
             }
 
-            // Jumlah row
             $sheet->setCellValue('B' . $row, 'Jumlah');
             $sheet->getStyle('A' . $row . ':P' . $row)->getFont()->setBold(true);
             $grand = 0;
@@ -477,14 +484,9 @@ class Rekap extends BaseController
                 }
                 $ci++;
             }
+            $grandPenarikan += array_sum(array_map(fn($m) => array_sum($m), $dataPenarikan));
             $sheet->setCellValue('O' . $row, $this->formatRp($grand));
-            $grandSaldo = $grand;
-            foreach ($dataPenarikan as $nama => $monthly) {
-                $grandSaldo -= array_sum($monthly);
-            }
-            if ($grandSaldo != 0) {
-                $sheet->setCellValue('P' . $row, $this->formatRp($grandSaldo));
-            }
+            $sheet->setCellValue('P' . $row, $this->formatRp($grand - $grandPenarikan));
             $lastRow = $row;
 
             $sheet->getStyle("A4:P$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
@@ -496,219 +498,9 @@ class Rekap extends BaseController
             }
         }
 
-        // REKAP-TAHUN
-        $rekapTahunData = [];
-        $rekapTahunPenarikan = [];
-        foreach ($yearData as $ta => $guruData) {
-            $total = 0;
-            foreach ($guruData as $nama => $monthly) {
-                $total += array_sum($monthly);
-            }
-            $rekapTahunData[$ta] = $total;
-        }
-        foreach ($yearDataPenarikan as $ta => $guruData) {
-            $total = 0;
-            foreach ($guruData as $nama => $monthly) {
-                $total += array_sum($monthly);
-            }
-            $rekapTahunPenarikan[$ta] = $total;
-        }
-
-        $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle('REKAP-TAHUN');
-
-        $sheet->setCellValue('A4', 'NO');
-        $sheet->setCellValue('B4', 'Tahun');
-        $sheet->setCellValue('C4', 'Setoran');
-        $sheet->setCellValue('D4', 'Penarikan');
-        $sheet->setCellValue('E4', 'Saldo');
-        $sheet->getStyle('A4:E4')->getFont()->setBold(true);
-
-        $row = 5;
-        $no = 1;
-        $grandSet = 0;
-        $grandPen = 0;
-        foreach ($rekapTahunData as $ta => $total) {
-            $pen = $rekapTahunPenarikan[$ta] ?? 0;
-            $sheet->setCellValue('A' . $row, $no);
-            $sheet->setCellValue('B' . $row, $ta);
-            $sheet->setCellValue('C' . $row, $this->formatRp($total));
-            $sheet->setCellValue('D' . $row, $this->formatRp($pen));
-            $sheet->setCellValue('E' . $row, $this->formatRp($total - $pen));
-            $grandSet += $total;
-            $grandPen += $pen;
-            $row++;
-            $no++;
-        }
-
-        $sheet->setCellValue('B' . $row, 'Jumlah');
-        $sheet->getStyle('A' . $row . ':E' . $row)->getFont()->setBold(true);
-        $sheet->setCellValue('C' . $row, $this->formatRp($grandSet));
-        $sheet->setCellValue('D' . $row, $this->formatRp($grandPen));
-        $sheet->setCellValue('E' . $row, $this->formatRp($grandSet - $grandPen));
-        $lastRow = $row;
-
-        $sheet->getStyle("A4:E$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-        $sheet->getColumnDimension('A')->setWidth(5);
-        $sheet->getColumnDimension('B')->setWidth(15);
-        $sheet->getColumnDimension('C')->setWidth(18);
-        $sheet->getColumnDimension('D')->setWidth(18);
-        $sheet->getColumnDimension('E')->setWidth(18);
-
-        // REKAP-GURU
-        $guruYearMatrix = [];
-        $guruYearPenarikan = [];
-        foreach ($yearData as $ta => $guruData) {
-            foreach ($guruData as $nama => $monthly) {
-                $total = array_sum($monthly);
-                if ($total > 0) {
-                    $guruYearMatrix[$ta][$nama] = $total;
-                }
-            }
-        }
-        foreach ($yearDataPenarikan as $ta => $guruData) {
-            foreach ($guruData as $nama => $monthly) {
-                $total = array_sum($monthly);
-                if ($total > 0) {
-                    $guruYearPenarikan[$ta][$nama] = $total;
-                }
-            }
-        }
-
-        $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle('REKAP-GURU');
-
-        $sheet->setCellValue('A1', 'TUNJANGAN HARI TUA (THT)');
-        $sheet->mergeCells('A1:Z1');
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-        $sheet->setCellValue('A2', 'T H T');
-        $sheet->mergeCells('A2:Z2');
-        $sheet->setCellValue('A3', 'N A M A');
-        $sheet->mergeCells('A3:Z3');
-
-        $sheet->setCellValue('A4', 'TP');
-        $sheet->getStyle('A4')->getFont()->setBold(true);
-
-        $colIdx = 2;
-        foreach ($guruNames as $nama) {
-            $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . '4', strtoupper($nama));
-            $sheet->getStyle($col . '4')->getFont()->setBold(true);
-            $colIdx++;
-        }
-        $maxColIdx = $colIdx;
-
-        $row = 5;
-        $grandIuran = [];
-        $grandRealisasi = [];
-        foreach ($allYears as $ta) {
-            // Baris Iuran
-            $sheet->setCellValue('A' . $row, $ta);
-            $sheet->setCellValue('B' . $row, 'Iuran');
-            $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-            $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('006633'));
-            $colIdx = 3;
-            foreach ($guruNames as $nama) {
-                $val = $guruYearMatrix[$ta][$nama] ?? 0;
-                $col = Coordinate::stringFromColumnIndex($colIdx);
-                if ($val > 0) {
-                    $sheet->setCellValue($col . $row, $this->formatRp($val));
-                    $grandIuran[$nama] = ($grandIuran[$nama] ?? 0) + $val;
-                } else {
-                    $sheet->setCellValue($col . $row, '-');
-                }
-                $colIdx++;
-            }
-            $row++;
-
-            // Baris Realisasi
-            $sheet->setCellValue('B' . $row, 'Realisasi');
-            $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-            $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('CC3333'));
-            $colIdx = 3;
-            foreach ($guruNames as $nama) {
-                $val = $guruYearPenarikan[$ta][$nama] ?? 0;
-                $col = Coordinate::stringFromColumnIndex($colIdx);
-                if ($val > 0) {
-                    $sheet->setCellValue($col . $row, $this->formatRp($val));
-                    $grandRealisasi[$nama] = ($grandRealisasi[$nama] ?? 0) + $val;
-                } else {
-                    $sheet->setCellValue($col . $row, '-');
-                }
-                $colIdx++;
-            }
-            $row++;
-        }
-
-        $lastDataRow = $row - 1;
-
-        // Saldo row
-        $sheet->setCellValue('B' . $row, 'Saldo');
-        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-        $sheet->getStyle('B' . $row)->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('0066CC'));
-        $colIdx = 3;
-        $grandTotalSaldo = 0;
-        foreach ($guruNames as $nama) {
-            $iuran = $grandIuran[$nama] ?? 0;
-            $realisasi = $grandRealisasi[$nama] ?? 0;
-            $saldo = $iuran - $realisasi;
-            $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . $row, $this->formatRp($saldo));
-            $sheet->getStyle($col . $row)->getFont()->setBold(true);
-            $grandTotalSaldo += $saldo;
-            $colIdx++;
-        }
-        $col = Coordinate::stringFromColumnIndex($colIdx);
-        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalSaldo));
-        $sheet->getStyle($col . $row)->getFont()->setBold(true);
-        $row++;
-
-        // Grand total rows
-        $sheet->setCellValue('A' . $row, 'JUMLAH');
-        $sheet->getStyle('A' . $row . ':A' . ($row + 1))->getFont()->setBold(true);
-        $sheet->setCellValue('B' . $row, 'Iuran');
-        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-        $colIdx = 3;
-        $grandTotalAll = 0;
-        foreach ($guruNames as $nama) {
-            $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . $row, $this->formatRp($grandIuran[$nama] ?? 0));
-            $sheet->getStyle($col . $row)->getFont()->setBold(true);
-            $grandTotalAll += ($grandIuran[$nama] ?? 0);
-            $colIdx++;
-        }
-        $col = Coordinate::stringFromColumnIndex($colIdx);
-        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalAll));
-        $sheet->getStyle($col . $row)->getFont()->setBold(true);
-        $row++;
-
-        $sheet->setCellValue('B' . $row, 'Realisasi');
-        $sheet->getStyle('B' . $row)->getFont()->setBold(true);
-        $colIdx = 3;
-        $grandTotalAllR = 0;
-        foreach ($guruNames as $nama) {
-            $col = Coordinate::stringFromColumnIndex($colIdx);
-            $sheet->setCellValue($col . $row, $this->formatRp($grandRealisasi[$nama] ?? 0));
-            $sheet->getStyle($col . $row)->getFont()->setBold(true);
-            $grandTotalAllR += ($grandRealisasi[$nama] ?? 0);
-            $colIdx++;
-        }
-        $col = Coordinate::stringFromColumnIndex($colIdx);
-        $sheet->setCellValue($col . $row, $this->formatRp($grandTotalAllR));
-        $sheet->getStyle($col . $row)->getFont()->setBold(true);
-        $lastRow = $row;
-
-        $sheet->getStyle("A4:" . Coordinate::stringFromColumnIndex($maxColIdx) . "$lastRow")->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-
-        $sheet->getColumnDimension('A')->setWidth(15);
-        $sheet->getColumnDimension('B')->setWidth(12);
-        for ($c = 3; $c <= $maxColIdx; $c++) {
-            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
-        }
-
         $spreadsheet->setActiveSheetIndex(0);
         $writer = new Xlsx($spreadsheet);
-        $filename = 'THT_tabungan hari tua.xlsx';
+        $filename = 'THT_tabungan_hari_tua' . ($tahunAjaran ? '_' . $tahunAjaran : '') . '.xlsx';
         $tmpFile = tempnam(sys_get_temp_dir(), 'tht');
         $writer->save($tmpFile);
         return $this->response->download($tmpFile, null)->setFileName($filename);
